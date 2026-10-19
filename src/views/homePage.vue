@@ -294,7 +294,7 @@
                         </el-popover>
                       </template>
                     </div>
-                    <tag type="success" class="dialog-footer-button" v-if="!player.isNewbie" @click="newbiePack(4)">
+                    <tag type="success" class="dialog-footer-button" v-if="!player.isNewbie" @click="newbiePack">
                       领取新手礼包
                     </tag>
                   </div>
@@ -1025,7 +1025,9 @@
       :before-close="confirmCollectionNewBie"
       class="newBieBox"
       direction="rtl"
+      size="min(720px, 94vw)"
     >
+      <p class="starter-note">四个部位各一件。刷新只替换预览，领取后存入行囊；红色刷新每次至少两件红色神阶装备，均为新手境界。</p>
       <div class="newBie">
         <tag
           v-for="(item, index) in newBieData"
@@ -1040,10 +1042,12 @@
           </el-icon>
         </tag>
       </div>
-      <el-button type="primary" :loading="newBieLoading" @click="refreshNewBie">
-        {{ newBieLoading ? '刷新中...' : '刷新装备' }}
-      </el-button>
-      <el-button type="primary" @click="confirmCollectionNewBie">领取装备</el-button>
+      <div class="starter-actions">
+        <el-button type="primary" @click="refreshNewBie('normal')">刷新装备</el-button>
+        <el-button type="danger" @click="refreshNewBie('red')">红色刷新 · 至少两件红装</el-button>
+        <el-button @click="confirmCollectionNewBie">领取装备</el-button>
+      </div>
+      <ExclusiveRedeem />
     </el-drawer>
     <el-dialog v-model="newBieInfoBox" :lock-scroll="false" :title="newBieItem.name" width="420px">
       <div class="monsterinfo">
@@ -1102,6 +1106,8 @@
   import achievement from '@/plugins/achievement'
   import equipTooltip from '@/components/equipTooltip.vue'
   import ForgePanel from '@/components/ForgePanel.vue'
+  import ExclusiveRedeem from '@/components/ExclusiveRedeem.vue'
+  import { createStarterPack, claimStarterPack } from '@/plugins/equipmentGrowth'
   import { baseAttributes, applyCompanionBalance } from '@/plugins/balance'
   import { hasActiveTrial } from '@/plugins/worldActivities'
   import { ElMessageBox } from 'element-plus'
@@ -1190,8 +1196,6 @@
   const inventoryInfo = ref({})
   // 新手礼包装备信息弹窗
   const newBieInfoBox = ref(false)
-  // 新手礼包刷新状态
-  const newBieLoading = ref(false)
   // 装备信息弹窗
   const inventoryShow = ref(false)
   // 炼器弹窗
@@ -1909,46 +1913,18 @@
       .catch(() => {})
   }
   // 赠送新手礼包
-  const newbiePack = timesLeft => {
+  const newbiePack = () => {
     // 如果没有领取新手礼包
     if (player.value.isNewbie) {
       gameNotifys({ title: '提示', message: '新手礼包无法重复领取' })
       return
     }
     newBieBox.value = true
-    // 初始化物品
-    let equipItem = {}
-    // 神兵
-    if (timesLeft == 4) equipItem = equip.equip_Weapons(1, false)
-    // 护甲
-    else if (timesLeft == 3) equipItem = equip.equip_Armors(1, false)
-    // 灵宝
-    else if (timesLeft == 2) equipItem = equip.equip_Accessorys(1, false)
-    // 法器
-    else if (timesLeft == 1) equipItem = equip.equip_Sutras(1, false)
-    // 修改刷新按钮加载状态
-    else if (timesLeft == 0) newBieLoading.value = false
-    // 终止
-    else return
-    // 将装备添加到库存
-    if (JSON.stringify(equipItem) != '{}') newBieData.value.push(equipItem)
-    // 更新剩余次数
-    timesLeft--
-    // 设置延时以便下一次调用
-    setTimeout(() => {
-      newbiePack(timesLeft)
-    }, 100)
+    newBieData.value = createStarterPack()
   }
 
   // 刷新新手礼包
-  const refreshNewBie = () => {
-    // 初始化数据
-    newBieData.value = []
-    // 修改刷新按钮加载状态
-    newBieLoading.value = true
-    // 赠送新手礼包
-    newbiePack(4)
-  }
+  const refreshNewBie = mode => { newBieData.value = createStarterPack(mode) }
 
   // 新手礼包装备信息
   const newBieInfo = item => {
@@ -1965,14 +1941,12 @@
       dangerouslyUseHTMLString: true
     })
       .then(() => {
+        const error = claimStarterPack(player.value, newBieData.value)
+        if (error) { gameNotifys({ title: '新手礼包', message: error }); return }
         // 关闭弹窗
         newBieBox.value = false
-        // 更新玩家装备
-        player.value.inventory.push(...newBieData.value)
         // 清空
         newBieData.value = []
-        // 修改礼包领取状态
-        player.value.isNewbie = true
         gameNotifys({
           title: '新手礼包领取提示',
           message: '新手礼包领取成功!'
@@ -2559,6 +2533,9 @@
   }
 
   /* 新手弹窗 */
+  .starter-note { line-height: 1.8; margin-bottom: 18px; font-size: 14px; }
+  .starter-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+  .starter-actions .el-button { margin-left: 0; }
   .newBie {
     display: flex;
     flex-direction: column;
@@ -2613,11 +2590,9 @@
     }
 
     /* 新手弹窗 */
-    .newBieBox {
-      width: 60% !important;
-    }
+    .newBieBox { width: 94% !important; }
 
-    .el-popper {
+    .el-popover.el-popper {
       display: none;
     }
   }

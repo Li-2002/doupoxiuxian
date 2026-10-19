@@ -23,6 +23,7 @@ export const initializeWorld = player => {
     addWorldLog(player, '已踏入斗气大陆，原有装备、法宝、灵宠与道侣均已保留。', 'realm')
   }
   const world = player.world
+  world.exclusiveRedeemed ??= false
   if (world.version < 2) {
     const defaults = createWorldState()
     for (const [key, value] of Object.entries(defaults)) if (world[key] === undefined) world[key] = value

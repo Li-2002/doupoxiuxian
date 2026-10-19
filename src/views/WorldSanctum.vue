@@ -15,11 +15,12 @@
           </article>
         </div>
       </el-tab-pane>
-      <el-tab-pane label="炼器坊" name="forge">
-        <p class="muted">所有神兵、护甲、法器与灵宝均可强化至 +30。每级增加初始主属性的 4%，前五次必成；之后失败保留装备和等级。战斗中请先退回营地整备。</p>
+      <el-tab-pane label="装备成长" name="forge">
+        <p class="muted">强化、提升境界、同部位传承：所有属性按装备境界与品质重新计算，不按当前数值连乘。强化上限 +30，每级增加初始主属性的 4%。战斗中请先退回营地整备。</p>
         <div class="stone-wallet"><span v-for="stone in stoneTiers" :key="stone.key" :style="{ color: stone.color }">{{ stone.name }} <b>{{ player.props[stone.key] }}</b></span></div>
         <div class="workshop-layout"><div class="workshop-items"><h3>选择装备</h3><p v-if="!allEquipment.length" class="muted">去大陆历练获得战利品，或领取洞府新手礼包。</p><button v-for="entry in allEquipment" :key="entry.item.id" class="workshop-item" :class="{ selected: selectedItem === entry.item }" @click="selectedItem = entry.item"><tag :type="entry.item.quality">{{ entry.item.name }} +{{ entry.item.strengthen || 0 }}</tag><small>{{ entry.worn ? '已穿戴' : '行囊' }} · {{ genre[entry.item.type] }}</small></button></div><Transition name="activity" mode="out-in"><ForgePanel v-if="selectedItem" :key="selectedItem.id" :item="selectedItem" /><p v-else class="forge-placeholder muted">选择一件装备，查看材料和强化效果。</p></Transition></div>
       </el-tab-pane>
+      <el-tab-pane label="定向打造与兑换" name="craft"><EquipmentCraft /></el-tab-pane>
       <el-tab-pane label="好感度表" name="npcs"><AffinityBoard /></el-tab-pane>
     </el-tabs>
   </main>
@@ -33,6 +34,7 @@
   import { levelNames, genre } from '@/plugins/game'
   import ForgePanel from '@/components/ForgePanel.vue'
   import AffinityBoard from '@/components/AffinityBoard.vue'
+  import EquipmentCraft from '@/components/EquipmentCraft.vue'
   import tag from '@/components/tag.vue'
   const player = useMainStore().player
   const world = player.world

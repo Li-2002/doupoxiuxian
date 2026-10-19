@@ -70,5 +70,5 @@ export const createWorldState = () => ({
   kills: 0, sessions: { kills: 0, money: 0, stones: 0, equipment: 0, cultivation: 0 }, logs: [],
   skills: { palm: 1 }, skillId: 'palm', trial: null, trialClears: {},
   garden: { plots: [null, null, null], herbs: 0, harvests: 0, visitor: null, helped: false },
-  social: {}, eventWins: 0, lastAttack: null, allocations: { attack: 0, defense: 0, health: 0 }
+  social: {}, eventWins: 0, lastAttack: null, allocations: { attack: 0, defense: 0, health: 0 }, exclusiveRedeemed: false
 })
