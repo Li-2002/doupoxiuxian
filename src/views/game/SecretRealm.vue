@@ -31,6 +31,7 @@
 </template>
 
 <script setup>
+  import { gainCultivation } from '@/plugins/douqi'
   import { ref, computed, onMounted } from 'vue'
   import { useMainStore } from '@/plugins/store'
   import { gameNotifys } from '@/plugins/game'
@@ -158,7 +159,7 @@
       {
         name: '灵感顿悟',
         effect: () => {
-          player.value.cultivation += 100
+          gainCultivation(player.value, 100)
         }
       },
       {

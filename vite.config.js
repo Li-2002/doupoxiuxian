@@ -40,7 +40,7 @@ export default defineConfig({
     }),
     VitePWA({
       manifest: {
-        name: '我的文字修仙全靠刷',
+        name: '斗破修仙世界',
         icons: [
           {
             src: '/icons/icon-192x192.png',
@@ -53,9 +53,9 @@ export default defineConfig({
             type: 'image/png'
           }
         ],
-        short_name: '文字修仙',
-        description: '文字游戏: 我的文字修仙全靠刷',
-        theme_color: '#4d4d4d'
+        short_name: '斗破修仙',
+        description: '斗气大陆：异火机缘、魔兽历练与挂机修炼',
+        theme_color: '#244c52'
       },
       devOptions: {
         enabled: true

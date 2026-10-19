@@ -348,7 +348,7 @@
       .map(() => ({ his: '', type: 'empty' }))
     const safeZone = createSafeZone()
     // 障碍物的数量
-    obstacleCount.value = Math.floor(totalCells.value * 0.1)
+    obstacleCount.value = Math.floor(totalCells.value * 0.02)
     // 生成障碍物
     generateItems('obstacle', obstacleCount.value, safeZone)
     // 确保障碍物生成不会堵塞路径

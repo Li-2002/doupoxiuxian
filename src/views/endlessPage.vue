@@ -49,6 +49,7 @@
 </template>
 
 <script setup>
+  import { gainCultivation } from '@/plugins/douqi'
   // 标签组件
   import tag from '@/components/tag.vue'
   // boss
@@ -286,7 +287,7 @@
     // 灵石
     const moneyGain = Math.floor(monster.value.level * 2)
     // 增加修为
-    player.value.cultivation += expGain
+    gainCultivation(player.value, expGain)
     // 增加灵石
     player.value.props.money += moneyGain
     // 日志
@@ -423,7 +424,7 @@
     // 根据当前层数计算获得灵石
     const moneyGain = Math.floor(currentFloor.value * 10)
     // 增加玩家修为
-    player.value.cultivation += expGain
+    gainCultivation(player.value, expGain)
     // 增加玩家灵石
     player.value.props.money += moneyGain
     // 增加击杀数

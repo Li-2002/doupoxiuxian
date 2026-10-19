@@ -6,7 +6,7 @@
       <div class="storyText">
         <div class="storyText-box">
           <el-scrollbar ref="scrollbar" always>
-            <p class="fighting" v-if="isFighting" v-text="`${guashaRounds}回合 / 10回合`" />
+            <p class="fighting" v-if="isFighting" v-text="`${guashaRounds}回合 / 40回合`" />
             <p
               v-for="(item, index) in texts"
               :key="index"
@@ -60,6 +60,7 @@
 </template>
 
 <script setup>
+  import { calculateStrike, applyCompanionBalance } from '@/plugins/balance'
   import { useRouter } from 'vue-router'
   import { ref, onMounted, onUnmounted } from 'vue'
   // 装备
@@ -68,7 +69,6 @@
   // 成就
   import achievement from '@/plugins/achievement'
   import {
-    maxLv,
     levelNames,
     formatNumberToChineseUnit,
     genre,
@@ -77,6 +77,8 @@
     smoothScrollToBottom
   } from '@/plugins/game'
   import { ElMessageBox } from 'element-plus'
+  import { gainCultivation, currentMap, seekFlame } from '@/plugins/douqi'
+  import { stoneTiers } from '@/plugins/douqiWorld'
 
   const store = useMainStore()
   const router = useRouter()
@@ -95,7 +97,7 @@
   const timerIds = ref([])
   const isFighting = ref(false)
   // 回合数
-  const guashaRounds = ref(10)
+  const guashaRounds = ref(40)
   // 撤退失败
   const isFailedRetreat = ref(false)
   // 收服失败
@@ -211,41 +213,18 @@
   const fightMonster = () => {
     isFighting.value = true
     if (monster.value.health <= 0) return
-    // 野怪伤害计算
-    const monsterAttack = monster.value.attack // 野怪攻击
-    const playerDefense = player.value.defense // 玩家防御
-    let monsterHarm = Math.max(0, Math.floor(monsterAttack - playerDefense)) // 野怪伤害
-    monsterHarm = monsterHarm <= 1 ? 1 : monsterHarm // 伤害小于1时强制破防
-    // 玩家伤害计算
-    const playerAttack = player.value.attack // 玩家攻击
-    const monsterDefense = monster.value.defense // 野怪防御
-    let playerHarm = Math.max(0, Math.floor(playerAttack - monsterDefense)) // 玩家伤害基础值
-    playerHarm = playerHarm <= 1 ? 1 : playerHarm // 伤害小于1时强制破防
-    // 是否暴击
-    let isMCritical = false,
-      isCritical = false
-    // 怪物是否闪避
-    const isMHit = Math.random() > player.value.dodge
-    // 玩家是否闪避
-    const isPHit = Math.random() > monster.value.dodge
-    // 检查野怪是否暴击
-    if (Math.random() < monster.value.critical) {
-      // 野怪暴击，伤害加倍
-      monsterHarm *= 2
-      // 野怪成功暴击
-      isMCritical = true
-    }
-    // 检查玩家是否暴击
-    if (Math.random() < player.value.critical) {
-      // 玩家暴击，伤害加倍
-      playerHarm *= 1.5
-      // 玩家成功暴击
-      isCritical = true
-    }
-    // 怪物没有闪避
-    if (isMHit) player.value.health -= monsterHarm
-    // 玩家没有闪避
-    if (isPHit) monster.value.health -= playerHarm
+    const attackResult = calculateStrike(player.value, monster.value, { round: 41 - guashaRounds.value })
+    monster.value.health = Math.max(0, monster.value.health - attackResult.damage)
+    const counter = monster.value.health > 0 ? calculateStrike(monster.value, player.value) : { damage: 0, isHit: false, isCritical: false }
+    player.value.health -= counter.damage
+    const playerHarm = attackResult.damage
+    const monsterHarm = counter.damage
+    const isCritical = attackResult.isCritical
+    const isMCritical = counter.isCritical
+    const isPHit = attackResult.isHit
+    const isMHit = counter.isHit
+    player.value.world.lastAttack = attackResult
+    if (attackResult.flames.length) texts.value.push('异火附伤：' + attackResult.flames.map(fire => fire.name + ' ' + fire.damage).join('、'))
     player.value.health = Math.max(0, player.value.health)
     monster.value.health = Math.max(0, monster.value.health)
     if (guashaRounds.value > 1) {
@@ -282,7 +261,7 @@
         )
       }
     } else {
-      guashaRounds.value = 10
+      guashaRounds.value = 40
       texts.value.push(`回合结束, 你未战胜${monster.value.name}你输了。`)
       stopFight()
     }
@@ -295,7 +274,7 @@
       isFailedRetreat.value = true
       texts.value.push('撤退失败，继续战斗。')
     } else {
-      guashaRounds.value = 10
+      guashaRounds.value = 40
       router.push('/map')
       gameNotifys({ title: '提示', message: '你选择了撤退。' })
     }
@@ -330,42 +309,13 @@
       // 玩家获得道具
       player.value.inventory.push(equipItem)
     }
-    // 如果没有满级
-    if (player.value.level < maxLv) {
-      // 增加修为
-      // 如果当前境界小于最高境界当前修为大于等于总修为
-      if (player.value.level < maxLv) {
-        if (player.value.cultivation >= player.value.maxCultivation) {
-          // 如果玩家等级大于10并且击杀数低于当前等级
-          if (player.value.level > 10 && player.value.level > player.value.taskNum) {
-            texts.value.push(
-              `当前境界修为已满, 你需要通过击败<span class="textColor">(${player.value.taskNum} / ${player.value.level})</span>个敌人证道突破`
-            )
-            return
-          }
-          // 清空已击杀敌人
-          player.value.taskNum = 0
-          // 增加境界
-          player.value.level++
-          // 增加点数
-          player.value.points += 3
-          // 更新气血
-          player.value.health = player.value.maxHealth
-          // 增加玩家总修为
-          player.value.maxCultivation = Math.floor(100 * Math.pow(2, player.value.level))
-          texts.value.push(`恭喜你突破了！当前境界：${levelNames(player.value.level)}`)
-        } else {
-          // 当前修为
-          player.value.cultivation += exp
-        }
-      } else {
-        isStop.value = false
-        isStart.value = false
-        player.value.level = maxLv
-        player.value.maxCultivation = Math.floor(100 * Math.pow(2, maxLv))
-        texts.value.push('你当前的境界已修炼圆满, 需要转生后才能继续修炼')
-      }
-    }
+    const map = currentMap(player.value)
+    player.value.props[stoneTiers[map.stone].key]++
+    player.value.world.kills++
+    player.value.props.money += 15 + player.value.level * 5
+    gainCultivation(player.value, exp)
+    seekFlame(player.value, map)
+    texts.value.push('额外获得 1 枚' + stoneTiers[map.stone].name + '，异火机缘已结算。')
   }
   // 发现的装备信息
   const openEquipmentInfo = item => {
@@ -440,6 +390,7 @@
           // 转生
           reincarnation: 0
         })
+        applyCompanionBalance(player.value.pets.at(-1))
         // 玩家灵宠成就
         const petAchievement = player.value.achievement.pet
         // 完成成就
@@ -470,7 +421,7 @@
         texts.value.push(`灵宠背包容量已满, 收服${item.name}失败, 转生可增加灵宠背包容量`)
       }
       // 恢复回合数
-      guashaRounds.value = 10
+      guashaRounds.value = 40
       stopFight()
       // 如果没有收服
     } else {

@@ -1,5 +1,8 @@
 import { defineStore } from 'pinia'
 import crypto from '@/plugins/crypto'
+import { createWorldState } from './douqiWorld.js'
+import { initializeWorld } from './douqi.js'
+import { enemyAttributes } from './balance.js'
 
 export const useMainStore = defineStore('main', {
   state: () => ({
@@ -10,7 +13,7 @@ export const useMainStore = defineStore('main', {
       time: 0,
       desc: '',
       level: 0,
-      dodge: 0,
+      dodge: 0.03,
       attack: 0,
       health: 0,
       conquer: false,
@@ -25,6 +28,7 @@ export const useMainStore = defineStore('main', {
       pet: {},
       time: 0,
       name: '玩家',
+      world: createWorldState(),
       dark: false,
       npcs: [],
       wife: {},
@@ -41,16 +45,16 @@ export const useMainStore = defineStore('main', {
       },
       score: 0,
       level: 0,
-      dodge: 0,
+      dodge: 0.03,
       points: 0,
-      attack: 10,
-      health: 100,
-      critical: 0,
-      defense: 10,
+      attack: 24,
+      health: 240,
+      critical: 0.05,
+      defense: 12,
       taskNum: 0,
       version: 0.8,
       currency: 0,
-      maxHealth: 100,
+      maxHealth: 240,
       inventory: [],
       isNewbie: false,
       shopData: [],
@@ -124,9 +128,23 @@ export const useMainStore = defineStore('main', {
       },
       deserialize: value => {
         const state = JSON.parse(value)
+        const player = crypto.decryption(state.player)
+        if (!player.world && !localStorage.getItem('vuex-before-douqi')) {
+          localStorage.setItem('vuex-before-douqi', value)
+        }
+        if (player.world?.balanceVersion !== 2 && !localStorage.getItem('vuex-before-balance2')) {
+          localStorage.setItem('vuex-before-balance2', value)
+        }
+        initializeWorld(player)
+        const boss = crypto.decryption(state.boss)
+        if (boss.name && boss.balanceVersion !== 2) {
+          const healthRatio = Math.max(0, Math.min(1, boss.health / (boss.maxhealth || boss.health || 1)))
+          Object.assign(boss, enemyAttributes(Math.min(102, boss.level), { health: 3.5, attack: 1.8, defense: 1.3 }), { balanceVersion: 2 })
+          boss.health = Math.round(boss.maxhealth * healthRatio)
+        }
         return {
-          boss: crypto.decryption(state.boss),
-          player: crypto.decryption(state.player)
+          boss,
+          player
         }
       }
     }

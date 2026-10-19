@@ -1,30 +1,10 @@
 import { ElNotification } from 'element-plus'
 
-export const maxLv = 144
+export { maxLv, levelNames } from './realms.js'
 
 export const gameNotifys = data => {
   ElNotification.closeAll()
   ElNotification(data)
-}
-
-// prettier-ignore
-export const levelNames = level => {
-  const levelsPerStage = 9
-  const stageIndex = Math.floor((level - 1) / levelsPerStage)
-  const stageLevel = ((level - 1) % levelsPerStage) + 1
-  const numberName = {
-    1: '一', 2: '二', 3: '三', 4: '四',
-    5: '五', 6: '六', 7: '七', 8: '八', 9: '九'
-  }
-  const stageNames = [
-    '筑基', '开光', '胎息', '辟谷',
-    '金丹', '元婴', '出窍', '分神',
-    '合体', '大乘', '渡劫', '地仙',
-    '天仙', '金仙', '大罗金仙', '九天玄仙'
-  ]
-  if (level === 0) return '凡人'
-  else if (level >= maxLv) return '九天玄仙九层'
-  else return `${stageNames[stageIndex]}${numberName[stageLevel]}层`
 }
 
 export const dropdownTypeObject = {
@@ -65,7 +45,13 @@ export const propItemNames = {
   qingyuan: { name: '情缘', desc: '可以通过赠送礼物给NPC获得' },
   currency: { name: '鸿蒙石', desc: '可以通过击败世界BOSS获得' },
   cultivateDan: { name: '培养丹', desc: '可以通过探索获得' },
-  strengtheningStone: { name: '炼器石', desc: '可以通过分解装备获得' }
+  strengtheningStone: { name: '炼器石', desc: '分解装备获得，可替代黄阶强化石' },
+  yellowStone: { name: '黄阶强化石', desc: '乌坦城、魔兽山脉掉落，用于 +0 至 +4 强化' },
+  blackStone: { name: '玄阶强化石', desc: '塔戈尔沙漠、黑角域掉落，用于 +5 至 +9 强化' },
+  earthStone: { name: '地阶强化石', desc: '迦南学院、云岚山掉落，用于 +10 至 +14 强化' },
+  heavenStone: { name: '天阶强化石', desc: '落神涧、丹域星空掉落，用于 +15 至 +19 强化' },
+  saintStone: { name: '圣阶强化石', desc: '远古兽域、远古遗迹掉落，用于 +20 至 +24 强化' },
+  emperorStone: { name: '帝阶强化石', desc: '古帝洞府掉落，用于 +25 至 +29 强化' }
 }
 
 export const formatNumberToChineseUnit = number => {

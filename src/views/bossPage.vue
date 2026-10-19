@@ -22,6 +22,7 @@
 </template>
 
 <script setup>
+  import { calculateStrike } from '@/plugins/balance'
   import boss from '@/plugins/boss'
   import { useRouter } from 'vue-router'
   import { ref, onUnmounted, onMounted } from 'vue'
@@ -105,41 +106,18 @@
       return
     }
     isFighting.value = true
-    // boss伤害计算
-    const monsterAttack = store.boss.attack // boss攻击
-    const playerDefense = player.value.defense // 玩家防御
-    let monsterHarm = Math.max(0, Math.floor(monsterAttack - playerDefense)) // boss伤害
-    monsterHarm = monsterHarm <= 1 ? 1 : monsterHarm // 伤害小于1时强制破防
-    // 玩家伤害计算
-    const playerAttack = player.value.attack // 玩家攻击
-    const monsterDefense = store.boss.defense // boss防御
-    let playerHarm = Math.max(0, Math.floor(playerAttack - monsterDefense)) // 玩家伤害基础值
-    playerHarm = playerHarm <= 1 ? 1 : playerHarm // 伤害小于1时强制破防
-    // 是否暴击
-    let isMCritical = false,
-      isCritical = false
-    // 玩家是否闪避
-    const isPlayerHit = Math.random() > store.boss.dodge
-    // boss是否闪避
-    const isBHit = Math.random() > player.value.dodge
-    // 检查boss是否暴击
-    if (Math.random() < store.boss.critical) {
-      // boss暴击，伤害加倍
-      monsterHarm *= 2
-      // boss成功暴击
-      isMCritical = true
-    }
-    // 检查玩家是否暴击
-    if (Math.random() < player.value.critical) {
-      // 玩家暴击，伤害加倍
-      playerHarm *= 1.5
-      // 玩家成功暴击
-      isCritical = true
-    }
-    // 如果玩家没有闪避，扣除玩家气血
-    if (isBHit) player.value.health -= monsterHarm
-    // 如果boss没有闪避，扣除boss气血
-    if (isPlayerHit) store.boss.health -= playerHarm
+    const attackResult = calculateStrike(player.value, store.boss, { round: 51 - guashaRounds.value })
+    store.boss.health = Math.max(0, store.boss.health - attackResult.damage)
+    const counter = store.boss.health > 0 ? calculateStrike(store.boss, player.value) : { damage: 0, isHit: false, isCritical: false }
+    player.value.health -= counter.damage
+    const playerHarm = attackResult.damage
+    const monsterHarm = counter.damage
+    const isCritical = attackResult.isCritical
+    const isMCritical = counter.isCritical
+    const isPlayerHit = attackResult.isHit
+    const isBHit = counter.isHit
+    player.value.world.lastAttack = attackResult
+    if (attackResult.flames.length) texts.value.push('异火附伤：' + attackResult.flames.map(fire => fire.name + ' ' + fire.damage).join('、'))
     player.value.health = Math.max(0, player.value.health)
     store.boss.health = Math.max(0, store.boss.health)
     if (guashaRounds.value > 1) {

@@ -1,22 +1,17 @@
+import { enemyAttributes, applyEquipmentBalance } from './balance.js'
+
 const boss = {
   drawPrize(lv) {
     const bossInfo = this.boss_Names()
-    // 血量
-    const health = this.getRandomInt(50000, 100000) * lv
-    // 攻击
-    const attack = this.getRandomInt(5000, 10000) * lv
-    // 防御
-    const defense = this.getRandomInt(1000, 10000) * lv
-    // 闪避
-    const dodge = this.getRandomFloatInRange(0.1, 0.8)
-    // 暴击
-    const critical = this.getRandomFloatInRange(0.1, 1)
+    const stats = enemyAttributes(Math.min(102, lv), { health: 3.5, attack: 1.8, defense: 1.3 })
+    const { health, attack, defense, critical, dodge } = stats
     return {
       name: bossInfo.name,
       text: this.boss_Text(),
       time: Math.floor(Date.now() / 1000),
       desc: bossInfo.description,
-      level: 144,
+      level: Math.min(102, lv),
+      balanceVersion: 2,
       dodge,
       attack,
       health,
@@ -62,8 +57,8 @@ const boss = {
         const Health = this.getRandomInt(5000, 10000) * lv * 10
         const defense = this.getRandomInt(500, 1000) * lv * 10
         const Criticalhitrate = this.getRandomFloatInRange(0.05, 0.1)
-        return {
-          id: Date.now(), // 装备ID
+        return applyEquipmentBalance({
+          id: globalThis.crypto.randomUUID(), // 装备ID
           name: names[Math.floor(Math.random() * names.length)], //装备名字
           type: quality, // 装备类型
           level: lv, // 装备等级
@@ -82,7 +77,7 @@ const boss = {
           },
           defense: ['armor', 'accessory', 'sutra'].includes(quality) ? defense : 0, // 装备防御
           critical: ['weapon', 'accessory', 'sutra'].includes(quality) ? Criticalhitrate : 0 // 暴击率
-        }
+        })
       }
     }
   },

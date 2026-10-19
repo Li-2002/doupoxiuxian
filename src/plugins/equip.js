@@ -1,3 +1,5 @@
+import { applyEquipmentBalance, combatScore } from './balance.js'
+
 const equips = {
   drawPrize(lv, type, names_a, names_b, names_c, names_d, names_e, names_f, isNewbie) {
     // 如果玩家等级为0 生成的装备等级最低为1, 如果玩家等级低于40级的话就随机生成当前等级和低于当前等级的装备
@@ -34,7 +36,7 @@ const equips = {
           : 0
         const critical = ['weapon', 'accessory', 'sutra'].includes(type) ? this.equip_Criticalhitrate(lv) : 0
         const baseEquip = {
-          id: Date.now(), // 装备ID
+          id: globalThis.crypto.randomUUID(), // 装备ID
           name: names[Math.floor(Math.random() * names.length)], //装备名字
           type, // 装备类型
           lock: false,
@@ -56,7 +58,7 @@ const equips = {
           quality,
           strengthen: 0 // 炼器等级
         }
-        return baseEquip
+        return applyEquipmentBalance(baseEquip)
       }
     }
   },
@@ -200,22 +202,7 @@ const equips = {
   },
   // 计算装备评分
   calculateEquipmentScore(dodge = 0, attack = 0, health = 0, critical = 0, defense = 0) {
-    // 评分权重
-    const weights = {
-      attack: 1.5, // 攻击
-      health: 1.0, // 气血
-      defense: 1.2, // 防御
-      critRate: 1.8, // 暴击
-      dodgeRate: 1.6 //闪避
-    }
-    // 计算评分
-    const score =
-      dodge * weights.dodgeRate * 100 +
-      attack * weights.attack +
-      (health / 100) * weights.health +
-      defense * weights.defense +
-      critical * weights.critRate * 100
-    return Math.floor(score)
+    return combatScore({ dodge, attack, health, critical, defense })
   }
 }
 export default equips

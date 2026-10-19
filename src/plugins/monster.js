@@ -1,3 +1,5 @@
+import { enemyAttributes } from './balance.js'
+
 const monsters = {
   // prettier-ignore
   monster_Names(lv) {
@@ -28,32 +30,16 @@ const monsters = {
     }
   },
   monster_Attack(lv) {
-    if (lv <= 144) {
-      return this.getRandomInt(50, 150) * lv
-    } else {
-      return this.getRandomInt(10000, 50000) * lv
-    }
+    return enemyAttributes(Math.min(102, lv), { scale: 1 + Math.max(0, lv - 102) / 102 })['attack']
   },
   monster_Health(lv) {
-    if (lv <= 144) {
-      return this.getRandomInt(100, 500) * lv
-    } else {
-      return this.getRandomInt(10000, 50000) * lv
-    }
+    return enemyAttributes(Math.min(102, lv), { scale: 1 + Math.max(0, lv - 102) / 102 })['health']
   },
   monster_Defense(lv) {
-    if (lv <= 144) {
-      return this.getRandomInt(1, 15) * lv
-    } else {
-      return this.getRandomInt(500, 1000) * lv
-    }
+    return enemyAttributes(Math.min(102, lv), { scale: 1 + Math.max(0, lv - 102) / 102 })['defense']
   },
-  monster_Criticalhitrate(lv) {
-    if (lv <= 144) {
-      return this.getRandomFloatInRange(0.001, 0.01)
-    } else {
-      return this.getRandomFloatInRange(0.1, 0.75)
-    }
+  monster_Criticalhitrate() {
+    return 0.05
   },
   getRandomInt(min, max) {
     min = Math.ceil(min)

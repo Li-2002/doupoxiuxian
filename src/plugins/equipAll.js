@@ -1,3 +1,5 @@
+import { applyEquipmentBalance } from './balance.js'
+
 const All = {
   drawPrize(lv) {
     const types = [
@@ -26,7 +28,7 @@ const All = {
       }
       return attrs[attribute]
     }
-    return types.map(({ type, data }) => ({
+    const groups = types.map(({ type, data }) => ({
       type,
       name: genre[type],
       data: data.flatMap((subtype, kk) =>
@@ -45,6 +47,8 @@ const All = {
         }))
       )
     }))
+    for (const group of groups) group.data.forEach(applyEquipmentBalance)
+    return groups
   },
   equipWeapons() {
     // prettier-ignore

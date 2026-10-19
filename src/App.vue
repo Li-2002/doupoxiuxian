@@ -1,11 +1,9 @@
 <template>
   <div class="game-container-wrapper" draggable="true">
     <div :class="['game-container', { dark: player.dark }]">
+      <WorldHeader />
       <router-view v-slot="{ Component }">
-        <keep-alive v-if="route.meta.keepAlive">
-          <component :is="Component" :key="key" />
-        </keep-alive>
-        <component v-if="!route.meta.keepAlive" :is="Component" :key="key" />
+        <Transition name="page" mode="out-in"><component :is="Component" :key="key" /></Transition>
       </router-view>
       <div class="footer">
         <el-switch size="large" v-model="player.dark">
@@ -39,12 +37,16 @@
 
 <script setup>
   import { useRoute } from 'vue-router'
-  import { ref, watch, computed, onMounted } from 'vue'
+  import { ref, watch, computed, onMounted, onUnmounted } from 'vue'
   import { useMainStore } from './plugins/store'
+  import WorldHeader from './components/WorldHeader.vue'
+  import { advanceWorld } from './plugins/douqi'
 
   const player = ref({})
   const route = useRoute()
   const key = computed(() => route.path)
+  let worldTimer
+  let ageTimer
 
   watch(
     () => player.value.dark,
@@ -56,7 +58,11 @@
   onMounted(() => {
     // 初始化玩家数据
     player.value = useMainStore().player
-    setInterval(() => {
+    worldTimer = setInterval(() => {
+      const allowHunt = !['/explore', '/boss', '/endlesstower', '/wander', '/game'].includes(route.path)
+      advanceWorld(player.value, Date.now(), allowHunt)
+    }, 1000)
+    ageTimer = setInterval(() => {
       // 每分钟增加1岁
       player.value.age += 1
       // 每分钟更新一次玩家最后在线时间
@@ -64,6 +70,10 @@
     }, 60000)
     // 如果有脚本的话, 执行脚本内容
     if (player.value.script) new Function(player.value.script)()
+  })
+  onUnmounted(() => {
+    clearInterval(worldTimer)
+    clearInterval(ageTimer)
   })
 </script>
 
@@ -85,12 +95,14 @@
   }
 
   .game-container {
-    min-width: 770px;
-    max-width: 770px;
+    width: min(1140px, 100%);
+    min-width: 0;
+    max-width: 1140px;
+    box-sizing: border-box;
     min-height: 740px;
     margin: 0 auto;
     padding: 20px;
-    background-color: rgba(255, 255, 255, 0.5);
+    background-color: var(--el-bg-color);
     text-align: center;
     position: relative;
   }
@@ -147,7 +159,8 @@
   @media only screen and (max-width: 768px) {
     .game-container {
       min-height: 574px;
-      min-width: 356px;
+      min-width: 0;
+      padding: 14px;
     }
   }
 </style>

@@ -1,5 +1,6 @@
 <template>
   <div class="index">
+    <div class="page-intro"><div><p class="place-label">乌坦城 · 旅人的落脚处</p><h1>洞府与行囊</h1><p class="muted">旧日的神兵与法宝，陪你再赴斗气大陆。</p></div></div>
     <div class="index-box">
       <div class="story">
         <p v-html="storyText" />
@@ -404,14 +405,14 @@
         </div>
       </div>
     </div>
-    <el-drawer title="修仙境界表" v-model="isLevel" direction="ltr" class="levels">
+    <el-drawer title="斗气境界表" v-model="isLevel" direction="ltr" class="levels">
       <tag
         class="inventory-item"
         :type="player.level == index ? 'primary' : index > player.level ? 'danger' : 'success'"
         :key="index"
-        v-for="(item, index) in maxLv"
+        v-for="(item, index) in maxLv + 1"
       >
-        {{ levelNames(item) }}
+        {{ levelNames(index) }}
       </tag>
     </el-drawer>
     <el-drawer :title="player.wife?.name" v-model="wifeItemShow" direction="rtl" class="strengthen">
@@ -473,29 +474,8 @@
         </div>
       </div>
     </el-drawer>
-    <el-drawer title="炼器" v-model="strengthenShow" direction="rtl" class="strengthen">
-      <div class="strengthen-box" v-if="strengthenShow">
-        <equip-tooltip
-          :calculate-cost="calcEnhanceCost(strengthenInfo)"
-          :calculate-enhance-success-rate="calculateEnhanceSuccessRate(strengthenInfo)"
-          :player="player"
-          :strengthen-info="strengthenInfo"
-        />
-        <div class="click-box">
-          <el-checkbox v-model="protect" label="炼器保护" />
-          <el-checkbox v-model="increase" label="炼器增幅" />
-          <el-popover
-            trigger="hover"
-            :width="350"
-            content="炼器等级大于等于15级时没有炼器保护，强化失败装备会被销毁"
-            placement="bottom"
-          >
-            <template #reference>
-              <el-button type="primary" @click="enhance(strengthenInfo)">点击炼器</el-button>
-            </template>
-          </el-popover>
-        </div>
-      </div>
+    <el-drawer title="装备强化" v-model="strengthenShow" direction="rtl" class="strengthen">
+      <ForgePanel v-if="strengthenShow" :item="strengthenInfo" />
     </el-drawer>
     <el-dialog :title="petInfo.name" :lock-scroll="false" v-model="petShow" center width="420px">
       <div class="monsterinfo">
@@ -958,6 +938,8 @@
       <div class="dialog-footer">
         <el-divider>存档相关</el-divider>
         <el-button type="info" class="dialog-footer-button" @click="exportData">导出存档</el-button>
+        <el-button v-if="hasBalanceBackup" class="dialog-footer-button" @click="exportBalanceBackup">导出数值调整前备份</el-button>
+        <el-button v-if="hasLegacyBackup" class="dialog-footer-button" @click="exportLegacyBackup">导出改版前备份</el-button>
         <el-upload
           action="#"
           class="dialog-upload"
@@ -1119,6 +1101,9 @@
   // 成就
   import achievement from '@/plugins/achievement'
   import equipTooltip from '@/components/equipTooltip.vue'
+  import ForgePanel from '@/components/ForgePanel.vue'
+  import { baseAttributes, applyCompanionBalance } from '@/plugins/balance'
+  import { hasActiveTrial } from '@/plugins/worldActivities'
   import { ElMessageBox } from 'element-plus'
   import { useMainStore } from '@/plugins/store'
   import {
@@ -1135,7 +1120,19 @@
 
   const store = useMainStore()
   const router = useRouter()
-  const ver = ref('1.0.0')
+  const ver = ref('2.0.0 · 斗气大陆')
+  const hasLegacyBackup = !!localStorage.getItem('vuex-before-douqi')
+  const hasBalanceBackup = !!localStorage.getItem('vuex-before-balance2')
+  const exportBalanceBackup = () => saveAs(new Blob([localStorage.getItem('vuex-before-balance2')], { type: 'application/json' }), '斗气大陆-数值调整前存档.json')
+  const combatLocked = () => {
+    if (!hasActiveTrial(player.value) && !player.value.world.encounter) return false
+    gameNotifys({ title: '整备提示', message: '请先结束战斗或退出试炼再调整属性与装备' })
+    return true
+  }
+  const exportLegacyBackup = () => {
+    const data = localStorage.getItem('vuex-before-douqi')
+    if (data) saveAs(new Blob([data], { type: 'application/json' }), '修仙世界-改版前存档.json')
+  }
   // 错误信息
   const err = ref('')
   const show = ref(false)
@@ -1151,10 +1148,6 @@
   const petShow = ref(false)
   // 灵宠数据
   const petInfo = ref({})
-  // 炼器保护
-  const protect = ref(false)
-  // 炼器增幅
-  const increase = ref(false)
   // 修改昵称
   const editName = ref(false)
   const levelsNum = ref({
@@ -1231,6 +1224,10 @@
   onMounted(() => {
     achievementAll.value = achievement.all()
     illustrationsItems.value = equipAll.drawPrize(maxLv)
+    if (player.value.currentTitle && !player.value.world.titleBonusLedger && !hasActiveTrial(player.value) && !player.value.world.encounter) {
+      const title = findAchievementByTitle(player.value.currentTitle)
+      if (title) applyTitleBonus(title.titleBonus, true)
+    }
     startGame()
   })
 
@@ -1306,25 +1303,14 @@
 
   // 初始化游戏
   const startGame = () => {
-    storyText.value = '你的修仙之旅开始了。'
+    storyText.value = '斗气大陆，强者为尊。整备行囊，下一段机缘正在山海之间。'
     actions.value = [
-      { text: '开始修炼', handler: () => router.push('/cultivate') },
+      { text: '斗气修炼', handler: () => router.push('/cultivate') },
+      { text: '异火与炼器', handler: () => router.push('/sanctum') },
+      { text: '秘境与机缘', handler: () => router.push('/adventures') },
       {
-        text: '探索秘境',
-        handler: () => {
-          if (!player.value.isNewbie) {
-            gameNotifys({ title: '提示', message: `新手礼包未领取` })
-            return
-          }
-          if (player.value.level < 10) {
-            gameNotifys({
-              title: '实力不足提示',
-              message: `外面太危险了, 请突破到${levelNames(10)}再出去吧!`
-            })
-            return
-          }
-          router.push('/map')
-        }
+        text: '大陆历练',
+        handler: () => router.push('/map')
       },
       {
         text: '图鉴与成就',
@@ -1337,7 +1323,7 @@
       { text: '休闲娱乐', handler: () => router.push('/game') }
     ]
     // 初始化玩家当前气血
-    player.value.health = player.value.maxHealth
+    if (player.value.world.mode === 'idle' && !hasActiveTrial(player.value) && !player.value.world.encounter) player.value.health = player.value.maxHealth
   }
 
   // 删除脚本
@@ -1606,7 +1592,7 @@
     const blob = new Blob([localStorage.getItem('vuex')], {
       type: 'application/json;charset=utf-8'
     })
-    const name = `我的文字修仙全靠刷-${year}${month}${day}${hours}${minutes}${seconds}-${ver.value}.json`
+    const name = `斗破修仙世界-${year}${month}${day}${hours}${minutes}${seconds}-${ver.value}.json`
     saveAs(blob, name)
   }
 
@@ -1627,6 +1613,7 @@
   }
   // 灵宠出战
   const petCarry = item => {
+    if (combatLocked()) return
     // 根据灵宠id查找灵宠信息
     const petItem = getObjectById(item.id, player.value.pets)
     // 如果已经有灵宠出战就收回
@@ -1706,134 +1693,9 @@
     return ojb
   }
 
-  // 炼器
-  const enhance = item => {
-    // 炼器成功率
-    const successRate = calculateEnhanceSuccessRate(item)
-    // 炼器消耗道具数量
-    const calculateCost = calcEnhanceCost(item)
-    // 如果炼器石不足
-    if (calculateCost > player.value.props.strengtheningStone) {
-      // 发送通知
-      gameNotifys({
-        title: '炼器提示',
-        message: '炼器石不足, 进行无法炼器操作',
-        position: 'top-left'
-      })
-      return
-    }
-    // 如果炼器等级已满
-    if (item.strengthen == 30) {
-      // 发送通知
-      gameNotifys({
-        title: '炼器提示',
-        message: '当前装备炼器等级已满',
-        position: 'top-left'
-      })
-      return
-    }
-    // 炼器确认弹窗
-    ElMessageBox.confirm(
-      item.strengthen >= 15 && !protect.value
-        ? `当前装备炼器等级已达到+${item.strengthen}, 如果炼器失败该装备会销毁, 请问还需要炼器吗?`
-        : '你确定要炼器吗?',
-      '炼器提示',
-      {
-        cancelButtonText: '我点错了',
-        confirmButtonText: '确定以及肯定'
-      }
-    )
-      .then(() => {
-        // 如果炼器成功
-        if (Math.random() <= successRate) {
-          // 攻击
-          const attack = Math.floor(item.initial.attack * 0.2)
-          // 血量
-          const health = Math.floor(item.initial.health * 0.2)
-          // 防御
-          const defense = Math.floor(item.initial.defense * 0.2)
-          switch (item.type) {
-            // 如果是神兵
-            case 'weapon':
-              item.attack += attack
-              playerAttribute(0, attack, 0, 0, 0)
-              break
-            // 如果是防具
-            case 'armor':
-              item.health += health
-              item.defense += defense
-              playerAttribute(0, 0, health, 0, defense)
-              break
-            // 如果是灵宝或法器
-            case 'accessory':
-            case 'sutra':
-              item.attack += attack
-              item.health += health
-              item.defense += defense
-              playerAttribute(0, attack, health, 0, defense)
-              break
-            default:
-              break
-          }
-          // 增加炼器等级
-          item.strengthen++
-          // 重新计算装备评分
-          item.score = equip.calculateEquipmentScore(item.dodge, item.attack, item.health, item.critical, item.defense)
-          // 发送炼器成功通知
-          gameNotifys({
-            title: '炼器提示',
-            message: '炼器成功',
-            position: 'top-left'
-          })
-        } else {
-          // 如果炼器等级等于或大于15级并且未开启炼器保护
-          if (item.strengthen >= 15 && !protect.value) {
-            // 移除销毁当前装备
-            player.value.equipment[item.type] = {}
-            // 扣除已销毁装备增加的属性
-            playerAttribute(-item.dodge, -item.attack, -item.health, -item.critical, -item.defense)
-            // 炼器等级清零
-            item.strengthen = 0
-            // 关闭炼器弹窗
-            strengthenShow.value = false
-          }
-          // 发送炼器失败通知
-          gameNotifys({
-            title: '炼器提示',
-            message: item.strengthen >= 15 && !protect.value ? '炼器失败, 装备已自动销毁' : '炼器失败',
-            position: 'top-left',
-            type: 'error'
-          })
-        }
-        // 扣除炼器石
-        player.value.props.strengtheningStone -= calculate
-      })
-      .catch(() => {})
-  }
-
-  // 计算炼器所需消耗的道具数量
-  const calcEnhanceCost = item => {
-    // 炼器基础消耗
-    let baseCost = item.level * 5
-    // 每级炼器需要增加的消耗
-    let incrementPerLevel = item.strengthen * 50
-    // 是否开启炼器保护
-    // 是否开启炼器增幅
-    // 最终所需消耗道具数量
-    return (baseCost + incrementPerLevel) * (protect.value ? 10 : 1) * (increase.value ? 5 : 1)
-  }
-  // 计算炼器成功概率
-  const calculateEnhanceSuccessRate = item => {
-    // 基础成功率
-    let baseSuccessRate = 1
-    // 每级降低成功率
-    let decrementPerLevel = 0.03
-    // 炼器增幅
-    // 最终成功率
-    return baseSuccessRate - (item.strengthen * decrementPerLevel - (increase.value ? 0.1 : 0))
-  }
   // 灵宠升级
   const petUpgrade = item => {
+    if (combatLocked()) return
     // 计算灵宠升级所需材料数量
     const consume = petConsumption(item.level)
 
@@ -1848,7 +1710,7 @@
       return
     }
     // 如果勾选了灵宠转生但是人物转生不等于灵宠转生
-    if (petReincarnation.value && player.value.reincarnation < player.value.pet.reincarnation) {
+    if (petReincarnation.value && player.value.reincarnation <= player.value.pet.reincarnation) {
       // 发送通知
       gameNotifys({
         title: '灵宠培养提示',
@@ -1893,76 +1755,27 @@
       confirmButtonText: '确定以及肯定'
     })
       .then(() => {
-        let attack,
-          health,
-          defense = 0
-        // 如果勾选了提升悟性并且悟性丹足够
-        if (petRootBone.value && player.value.props.rootBone >= item.rootBone) {
-          let rootBone = item.initial.rootBone - item.rootBone
-          rootBone = rootBone ? rootBone : 1
-          // 攻击
-          attack = Math.floor(item.initial.attack * rootBone)
-          // 血量
-          health = Math.floor(item.initial.health * rootBone)
-          // 防御
-          defense = Math.floor(item.initial.defense * rootBone)
-          // 提升悟性
-          item.rootBone++
-          // 扣除悟性丹
-          player.value.props.rootBone -= item.rootBone
-        } else {
-          // 攻击
-          attack = Math.floor(item.initial.attack * 0.05)
-          // 血量
-          health = Math.floor(item.initial.health * 0.05)
-          // 防御
-          defense = Math.floor(item.initial.defense * 0.05)
+        const before = { attack: item.attack, defense: item.defense, health: item.health }
+        if (petRootBone.value) {
+          const rootCost = Math.max(1, item.rootBone || 1)
+          player.value.props.rootBone -= rootCost
+          item.rootBone = Math.min(50, (item.rootBone || 0) + 1)
         }
-        // 如果勾选了转生并且当前等级已满
-        if (petReincarnation.value && item.level >= maxLv) {
-          // 重置灵宠等级
-          player.value.pet.level = 1
-          // 取消转生勾选
+        if (petReincarnation.value) {
+          item.level = 1
+          item.reincarnation++
           petReincarnation.value = false
-          // 增加灵宠转生次数
-          player.value.pet.reincarnation++
-          // 发送通知
-          gameNotifys({
-            title: '灵宠培养提示',
-            message: '灵宠转生成功, 已重置灵宠境界',
-            position: 'top-left'
-          })
-        } else {
-          // 增加灵宠等级
-          player.value.pet.level++
-          // 发送通知
-          gameNotifys({
-            title: '灵宠培养提示',
-            message: '灵宠培养成功',
-            position: 'top-left'
-          })
-        }
-        // 增加灵宠属性
-        player.value.pet.attack += attack
-        player.value.pet.health += health
-        player.value.pet.defense += defense
-        // 更新玩家属性，添加灵宠培养后的属性加成
-        playerAttribute(0, attack, health, 0, defense)
-        // 重新计算灵宠评分
-        player.value.pet.score = equip.calculateEquipmentScore(
-          player.value.pet.dodge,
-          player.value.pet.attack,
-          player.value.pet.health,
-          player.value.pet.critical,
-          player.value.pet.defense
-        )
-        // 扣除培养丹
+        } else item.level++
+        applyCompanionBalance(item)
+        playerAttribute(0, item.attack - before.attack, item.health - before.health, 0, item.defense - before.defense)
         player.value.props.cultivateDan -= consume
+        gameNotifys({ title: '灵宠培养', message: '培养成功，属性按当前境界与悟性重新计算' })
       })
       .catch(() => {})
   }
   // 道侣升级
   const wifeUpgrade = item => {
+    if (combatLocked()) return
     // 计算道侣升级所需材料数量
     const consume = item.level * 10
     // 如果情缘点不足
@@ -1981,25 +1794,12 @@
       confirmButtonText: '确定以及肯定'
     })
       .then(() => {
-        const attack = Math.floor(item.attack * 0.1)
-        const health = Math.floor(item.health * 0.1)
-        const defense = Math.floor(item.defense * 0.1)
-        // 增加道侣等级
-        player.value.wife.level++
-        // 发送通知
-        gameNotifys({
-          title: '道侣升级提示',
-          message: '道侣升级提示成功',
-          position: 'top-left'
-        })
-        // 增加道侣属性
-        player.value.wife.attack += attack
-        player.value.wife.health += health
-        player.value.wife.defense += defense
-        // 更新玩家属性，添加道侣升级后的属性加成
-        playerAttribute(0, attack, health, 0, defense)
-        // 扣除情缘点
+        const before = { attack: item.attack, defense: item.defense, health: item.health }
+        item.level++
+        applyCompanionBalance(item)
+        playerAttribute(0, item.attack - before.attack, item.health - before.health, 0, item.defense - before.defense)
         player.value.props.qingyuan -= consume
+        gameNotifys({ title: '道侣培养', message: '培养成功，同行属性稳步提升' })
       })
       .catch(() => {})
   }
@@ -2036,6 +1836,7 @@
   }
   // 道侣跟随
   const wifeTack = item => {
+    if (combatLocked()) return
     // 如果已经有道侣跟随就收回
     if (JSON.stringify(player.value.wife) != '{}') {
       const itemInfo = player.value.wife
@@ -2052,6 +1853,7 @@
   }
   // 道侣收回
   const wifeRevoke = () => {
+    if (combatLocked()) return
     const item = player.value.wife
     // 更新玩家属性，移除当前跟随道侣的属性加成
     playerAttribute(-item.dodge, -item.attack, -item.health, -item.critical, -item.defense)
@@ -2117,13 +1919,13 @@
     // 初始化物品
     let equipItem = {}
     // 神兵
-    if (timesLeft == 4) equipItem = equip.equip_Weapons(10, false)
+    if (timesLeft == 4) equipItem = equip.equip_Weapons(1, false)
     // 护甲
-    else if (timesLeft == 3) equipItem = equip.equip_Armors(10, false)
+    else if (timesLeft == 3) equipItem = equip.equip_Armors(1, false)
     // 灵宝
-    else if (timesLeft == 2) equipItem = equip.equip_Accessorys(10, false)
+    else if (timesLeft == 2) equipItem = equip.equip_Accessorys(1, false)
     // 法器
-    else if (timesLeft == 1) equipItem = equip.equip_Sutras(10, false)
+    else if (timesLeft == 1) equipItem = equip.equip_Sutras(1, false)
     // 修改刷新按钮加载状态
     else if (timesLeft == 0) newBieLoading.value = false
     // 终止
@@ -2166,7 +1968,7 @@
         // 关闭弹窗
         newBieBox.value = false
         // 更新玩家装备
-        player.value.inventory = newBieData.value
+        player.value.inventory.push(...newBieData.value)
         // 清空
         newBieData.value = []
         // 修改礼包领取状态
@@ -2229,6 +2031,7 @@
 
   // 灵宠收回
   const petRetract = () => {
+    if (combatLocked()) return
     const item = player.value.pet
     if (JSON.stringify(item) == '{}') return
     // 更新玩家属性，移除当前出战灵宠的属性加成
@@ -2280,6 +2083,7 @@
 
   // 卸装备
   const equipmentClose = type => {
+    if (combatLocked()) return
     const { inventory, equipment } = player.value
     if (!equipment[type]) return
     // 更新玩家属性，移除当前穿戴装备的属性加成
@@ -2302,9 +2106,10 @@
 
   // 穿装备
   const equipItem = (id, type) => {
+    if (combatLocked()) return
     const inventoryItem = getObjectById(id, player.value.inventory)
     // 如果当前装备境界大于人物的境界
-    if (!player.value.reincarnation && inventoryItem.level > player.value.level) {
+    if (!player.value.reincarnation && inventoryItem.level > Math.max(1, player.value.level)) {
       gameNotifys({ title: '当前境界不足', message: '无法穿戴该装备' })
       return
     }
@@ -2377,14 +2182,16 @@
 
   // 属性加点
   const attributePoints = type => {
+    if (combatLocked()) return
     const typeNames = {
       attack: '攻击',
       health: '气血',
       defense: '防御'
     }
     if (player.value.points > 0) {
-      const num = player.value.reincarnation ? player.value.reincarnation * 10 : 1
-      const numText = type == 'attack' || type == 'defense' ? 50 * num : 100 * num
+      const scale = 1 + Math.min(10, player.value.reincarnation) * 0.12
+      const numText = Math.round(({ attack: 2, defense: 1, health: 18 }[type] || 0) * scale)
+      player.value.world.allocations[type] = (player.value.world.allocations[type] || 0) + 1
       // 如果是攻击
       if (type == 'attack') playerAttribute(0, numText, 0, 0, 0)
       // 如果是防御
@@ -2496,6 +2303,7 @@
   }
 
   const toggleTitle = achievement => {
+    if (combatLocked()) return
     if (player.value.currentTitle === achievement.name) {
       // 取消佩戴称号
       applyTitleBonus(achievement.titleBonus, false)
@@ -2521,33 +2329,13 @@
   }
 
   const applyTitleBonus = (bonus, isApplying) => {
-    const multiplier = isApplying ? 1 : -1
-    let dodge = 0,
-      attack = 0,
-      health = 0,
-      critical = 0,
-      defense = 0
-    Object.entries(bonus).forEach(([key, value]) => {
-      switch (key) {
-        case 'dodge':
-          dodge += value * multiplier
-          break
-        case 'attack':
-          attack += value * multiplier
-          break
-        case 'health':
-          health += value * multiplier
-          break
-        case 'critical':
-          critical += value * multiplier
-          break
-        case 'defense':
-          defense += value * multiplier
-          break
-        default:
-      }
-    })
-    playerAttribute(dodge, attack, health, critical, defense)
+    const base = baseAttributes(player.value.level, player.value.reincarnation)
+    const applied = isApplying ? Object.fromEntries(Object.entries(bonus).map(([key, value]) => [key,
+      ['dodge', 'critical'].includes(key) ? Math.min(0.05, value) : Math.round((base[key] || 0) * 0.12 * value / (value + 1000))
+    ])) : (player.value.world.titleBonusLedger || {})
+    const sign = isApplying ? 1 : -1
+    playerAttribute((applied.dodge || 0) * sign, (applied.attack || 0) * sign, (applied.health || 0) * sign, (applied.critical || 0) * sign, (applied.defense || 0) * sign)
+    player.value.world.titleBonusLedger = isApplying ? applied : {}
   }
   const findAchievementByTitle = title => {
     return achievementAll.value.flatMap(category => category.data).find(ach => ach.name === title)
