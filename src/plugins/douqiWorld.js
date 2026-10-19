@@ -64,7 +64,7 @@ export const heavenlyFlames = [
 for (const map of worldMaps) map.fires = map.fires.filter(id => !flameAcquisition[id])
 
 export const createWorldState = () => ({
-  version: 2, balanceVersion: 2, mapId: 'wutan', mode: 'idle', autoNpc: true, autoSalvage: true,
+  version: 2, balanceVersion: 2, mapId: 'wutan', mode: 'idle', autoNpc: true, autoSalvage: true, herbCooldown: 0,
   lastTick: Date.now(), encounter: null, opportunity: null, resting: false,
   flames: [], activeFlame: '', clues: {}, pity: {}, relationships: {},
   kills: 0, sessions: { kills: 0, money: 0, stones: 0, equipment: 0, cultivation: 0 }, logs: [],

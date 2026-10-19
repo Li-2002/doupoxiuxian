@@ -16,7 +16,7 @@
         </div>
       </el-tab-pane>
       <el-tab-pane label="装备成长" name="forge">
-        <p class="muted">强化、提升境界、同部位传承：所有属性按装备境界与品质重新计算，不按当前数值连乘。强化上限 +30，每级增加初始主属性的 4%。战斗中请先退回营地整备。</p>
+        <p class="muted">普通装备仅靠强化成长；四件专属随收集异火共鸣成长，还可提升境界。强化上限 +30，同部位可传承强化。</p>
         <div class="stone-wallet"><span v-for="stone in stoneTiers" :key="stone.key" :style="{ color: stone.color }">{{ stone.name }} <b>{{ player.props[stone.key] }}</b></span></div>
         <div class="workshop-layout"><div class="workshop-items"><h3>选择装备</h3><p v-if="!allEquipment.length" class="muted">去大陆历练获得战利品，或领取洞府新手礼包。</p><button v-for="entry in allEquipment" :key="entry.item.id" class="workshop-item" :class="{ selected: selectedItem === entry.item }" @click="selectedItem = entry.item"><tag :type="entry.item.quality">{{ entry.item.name }} +{{ entry.item.strengthen || 0 }}</tag><small>{{ entry.worn ? '已穿戴' : '行囊' }} · {{ genre[entry.item.type] }}</small></button></div><Transition name="activity" mode="out-in"><ForgePanel v-if="selectedItem" :key="selectedItem.id" :item="selectedItem" /><p v-else class="forge-placeholder muted">选择一件装备，查看材料和强化效果。</p></Transition></div>
       </el-tab-pane>
@@ -30,6 +30,7 @@
   import { useMainStore } from '@/plugins/store'
   import { heavenlyFlames, stoneTiers } from '@/plugins/douqiWorld'
   import { refineFlame } from '@/plugins/douqi'
+  import { operationFeedback } from '@/plugins/feedback'
   import { flameDamageProfile } from '@/plugins/balance'
   import { levelNames, genre } from '@/plugins/game'
   import ForgePanel from '@/components/ForgePanel.vue'
@@ -46,5 +47,5 @@
   const sourceNames = { wild: '野外随机机缘', trial: '多关副本首通', garden: '药圃奇遇', bond: '伴侣赠礼', boss: '稀有野外首领' }
   const sourceLink = fire => fire.source.type === 'trial' ? { path: '/adventures', query: { tab: fire.source.trial === 'danta' ? 'danta' : 'trials' } } : fire.source.type === 'garden' ? '/adventures?tab=garden' : fire.source.type === 'bond' ? '/adventures?tab=affinity' : '/map'
   const allEquipment = computed(() => [...Object.values(player.equipment).filter(item => item?.name).map(item => ({ item, worn: true })), ...player.inventory.map(item => ({ item, worn: false }))])
-  const refine = id => { feedback.value = refineFlame(player, id) || '炼化成功，已加入协同附伤。' }
+  const refine = id => { feedback.value = operationFeedback(refineFlame(player, id), '炼化成功，已加入协同附伤。') }
 </script>

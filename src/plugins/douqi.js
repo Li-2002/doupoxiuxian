@@ -1,8 +1,9 @@
 import equip from './equip.js'
 import { maxLv, levelNames, cultivationCost } from './realms.js'
 import { createWorldState, worldMaps, worldNpcs, heavenlyFlames, stoneTiers } from './douqiWorld.js'
-import { migrateBalance, flameDamageProfile, calculateStrike, enemyAttributes, applyEquipmentBalance, combatScore } from './balance.js'
-import { hasActiveTrial, trialStep, meetNpc, changeAffinity, createWildEvent, resolveOpportunity } from './worldActivities.js'
+import { migrateBalance, flameDamageProfile, calculateStrike, enemyAttributes, applyEquipmentBalance, combatScore, syncExclusiveEquipment } from './balance.js'
+import { hasActiveTrial, trialStep, meetNpc, changeAffinity, createWildEvent, resolveOpportunity, settleGardenCultivation } from './worldActivities.js'
+import { initializeHerbs, autoHealWithHerbs } from './herbs.js'
 import { addWorldLog, gainCultivation, currentMap, grantFlame } from './worldProgress.js'
 export { addWorldLog, gainCultivation, currentMap } from './worldProgress.js'
 export { resolveOpportunity } from './worldActivities.js'
@@ -38,7 +39,15 @@ export const initializeWorld = player => {
     addWorldLog(player, '异火获取与属性体系已更新，旧物品和收集进度保留；战斗数值已统一重算。', 'system')
   }
   for (const stone of stoneTiers) player.props[stone.key] ??= 0
+  initializeHerbs(player)
+  world.herbCooldown ??= 0
+  if (world.mode === 'both') {
+    world.mode = 'idle'
+    world.lastTick = Date.now()
+    addWorldLog(player, '同修模式已取消，挂机已停止。请选择自动打怪或自动修炼。', 'system')
+  }
   migrateBalance(player)
+  syncExclusiveEquipment(player)
   player.score = combatScore(player)
   for (const npc of worldNpcs) {
     if (player.wife?.name === npc.name || player.wifes?.some(item => item.name === npc.name)) {
@@ -65,15 +74,31 @@ export const cultivateTick = player => {
 }
 
 export const setAutomation = (player, mode, now = Date.now()) => {
-  if (!['idle', 'hunt', 'cultivate', 'both'].includes(mode)) return
+  if (!['idle', 'hunt', 'cultivate'].includes(mode)) return
   if (mode !== 'idle' && hasActiveTrial(player)) {
-    addWorldLog(player, '试炼中无法开启挂机修炼或野外打怪，请先结束试炼。', 'system')
-    return
+    const error = '试炼中无法开启挂机修炼或野外打怪，请先结束试炼。'
+    addWorldLog(player, error, 'system')
+    return error
   }
   player.world.mode = mode
+  if (mode === 'cultivate') {
+    player.world.encounter = null
+    player.world.opportunity = null
+    player.world.resting = false
+  }
   player.world.lastTick = now
-  const names = { idle: '已停止挂机', hunt: '已开启自动打怪', cultivate: '已开启自动修炼', both: '已开启打怪与修炼同修' }
+  const names = { idle: '已停止挂机', hunt: '已开启自动打怪', cultivate: '已开启自动修炼，野外历练已停止' }
   addWorldLog(player, names[mode], 'system')
+}
+
+export const automationStatus = (player, paused = false) => {
+  const world = player.world
+  if (world.mode === 'cultivate') return '正在自动修炼'
+  if (world.mode !== 'hunt') return '当前为手动模式'
+  if (paused) return '自动打怪已暂停 · 传统战斗进行中'
+  if (world.resting) return '正在自动打怪 · 营地疗伤中'
+  if (world.opportunity && !world.autoNpc) return '正在自动打怪 · 等待处理野外机缘'
+  return '正在自动打怪'
 }
 
 export const selectMap = (player, id) => {
@@ -165,6 +190,7 @@ export const strikeText = result => {
 export const explorationStep = (player, random = Math.random) => {
   const world = player.world
   if (hasActiveTrial(player)) return
+  autoHealWithHerbs(player)
   let map = currentMap(player)
   if (player.level < map.min) { selectMap(player, 'wutan'); map = currentMap(player) }
   if (world.opportunity) {
@@ -223,8 +249,10 @@ export const advanceWorld = (player, now = Date.now(), allowHunt = true, limit =
   if (!ticks) return 0
   for (let i = 0; i < ticks; i++) {
     if (hasActiveTrial(player)) { if (world.trial.auto) trialStep(player); continue }
-    if (world.mode === 'cultivate' || world.mode === 'both') cultivateTick(player)
-    if (allowHunt && (world.mode === 'hunt' || world.mode === 'both')) explorationStep(player)
+    world.herbCooldown = Math.max(0, (world.herbCooldown || 0) - 1)
+    if (world.mode === 'cultivate') cultivateTick(player)
+    if (allowHunt && world.mode === 'hunt') explorationStep(player)
+    settleGardenCultivation(player)
   }
   world.lastTick = now - (elapsed % WORLD_TICK)
   if (world.mode === 'cultivate' && player.level >= maxLv) setAutomation(player, 'idle', now)

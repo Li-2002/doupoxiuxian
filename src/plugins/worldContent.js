@@ -24,9 +24,9 @@ export const combatSkills = [
 ]
 
 export const herbSeeds = [
-  { id: 'grass', name: '凝血草', min: 0, seconds: 60, cost: 12, yield: 3, sell: 8 },
-  { id: 'lotus-herb', name: '冰灵焰草', min: 18, seconds: 180, cost: 45, yield: 5, sell: 16 },
-  { id: 'soul', name: '养魂涎', min: 45, seconds: 360, cost: 100, yield: 8, sell: 25 }
+  { id: 'grass', key: 'bloodGrass', name: '凝血草', heal: 0.15, min: 0, seconds: 60, cost: 12, yield: 3, sell: 8 },
+  { id: 'lotus-herb', key: 'iceFlameGrass', name: '冰灵焰草', heal: 0.25, min: 18, seconds: 180, cost: 45, yield: 5, sell: 16 },
+  { id: 'soul', key: 'soulDew', name: '养魂涎', heal: 0.35, min: 45, seconds: 360, cost: 100, yield: 8, sell: 25 }
 ]
 
 export const wildEventTypes = {

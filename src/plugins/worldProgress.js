@@ -1,6 +1,6 @@
 import { maxLv, levelNames, cultivationCost } from './realms.js'
 import { heavenlyFlames, worldMaps } from './douqiWorld.js'
-import { baseAttributes, combatScore } from './balance.js'
+import { baseAttributes, combatScore, syncExclusiveEquipment } from './balance.js'
 
 export const currentMap = player => worldMaps.find(map => map.id === player.world.mapId) || worldMaps[0]
 export const addWorldLog = (player, text, type = 'normal') => {
@@ -35,6 +35,7 @@ export const grantFlame = (player, id, source) => {
   const fire = heavenlyFlames.find(item => item.id === id)
   if (!fire || fire.source.type !== source || player.world.flames.some(item => item.id === id)) return false
   player.world.flames.push({ id, refined: false, source, foundAt: Date.now() })
+  syncExclusiveEquipment(player)
   addWorldLog(player, `获得异火榜第 ${fire.rank}「${fire.name}」火种。炼化后，每次命中自动附带这道异火伤害。`, 'flame')
   return true
 }

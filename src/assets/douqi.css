@@ -29,6 +29,8 @@ html.dark body { background: #17272a; }
 .activity-summary { display: flex; justify-content: space-between; align-items: center; gap: 20px; margin: 18px 0 22px; }
 .activity-summary > span, .activity-summary > strong { font-size: 12px; color: #9a7c44; }
 .activity-feedback { color: var(--el-color-primary); font-size: 13px; min-height: 24px; line-height: 1.8; }
+.automation-state { margin: 12px 0; font-size: 14px; color: var(--el-text-color-secondary); }
+.automation-state.active { color: var(--el-color-primary); font-weight: 600; }
 .activity-actions { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin: 18px 0; }
 .activity-actions .el-button { margin: 0; }
 .trial-selector { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin: 20px 0; }

@@ -9,8 +9,8 @@
       <p class="muted">修为 {{ Math.floor(player.cultivation).toLocaleString() }} / {{ player.maxCultivation.toLocaleString() }}</p>
       <p class="muted">每 2 秒吐纳一次，修为满时自动突破，获得属性与 3 点境界点。异火与 NPC 交情可提高修炼收益。</p>
       <p v-if="flame.count" class="flame-cultivation">{{ flame.count }} 道异火护体 · 修炼收益 +{{ Math.round(flame.cultivation * 100) }}%</p>
-      <div class="meditation-actions"><el-button type="primary" size="large" :disabled="player.level >= maxLv || world.mode === 'cultivate'" @click="setAutomation(player, 'cultivate')">挂机修炼</el-button><el-button size="large" :disabled="world.mode === 'both'" @click="setAutomation(player, 'both')">历练与修炼同修</el-button><el-button size="large" :disabled="world.mode === 'idle'" @click="setAutomation(player, 'idle')">停止挂机</el-button><el-button size="large" @click="reincarnate">转生突破</el-button></div>
-      <p class="muted">当前：{{ modeNames[world.mode] }} · 切换页面继续运行 · 离线最多结算 4 小时</p>
+      <div class="meditation-actions"><el-button type="primary" size="large" :disabled="player.level >= maxLv || world.mode === 'cultivate'" @click="operationFeedback(setAutomation(player, 'cultivate'))">挂机修炼</el-button><el-button size="large" :disabled="world.mode === 'idle'" @click="setAutomation(player, 'idle')">停止挂机</el-button><el-button size="large" @click="reincarnate">转生突破</el-button></div>
+      <p class="automation-state" :class="{ active: world.mode !== 'idle' }">{{ automationStatus(player) }}</p>
     </section>
     <div class="realm-road"><span v-for="stage in stages" :key="stage.name" :class="{ reached: player.level >= stage.level }"><b>{{ stage.name }}</b><small>{{ player.level >= stage.level ? '已踏入' : levelNames(stage.level) }}</small></span></div>
     <section class="journal"><div class="section-title"><h3>修行札记</h3><router-link class="quiet-link" to="/map">前往大陆历练</router-link></div><div class="journal-entries" role="log"><p v-if="!logs.length" class="muted">开启挂机修炼，静候斗气突破。</p><div v-for="(entry, i) in logs" :key="i" class="journal-entry" :class="entry.type"><time>{{ new Date(entry.time).toLocaleTimeString('zh-CN', { hour12: false }) }}</time><span>{{ entry.text }}</span></div></div></section>
@@ -18,11 +18,12 @@
 </template>
 <script setup>
   import { computed } from 'vue'
-  import { ElMessageBox, ElMessage } from 'element-plus'
+  import { ElMessageBox } from 'element-plus'
+  import { operationFeedback, notifyFailure } from '@/plugins/feedback'
   import { useMainStore } from '@/plugins/store'
   import { levelNames, maxLv } from '@/plugins/game'
   import { cultivationCost } from '@/plugins/realms'
-  import { setAutomation, selectMap, addWorldLog, flameBonuses } from '@/plugins/douqi'
+  import { setAutomation, selectMap, addWorldLog, flameBonuses, automationStatus } from '@/plugins/douqi'
   import { flameDamageProfile } from '@/plugins/balance'
   import { hasActiveTrial } from '@/plugins/worldActivities'
   const player = useMainStore().player
@@ -30,14 +31,13 @@
   const percentage = computed(() => player.level >= maxLv ? 100 : Math.min(100, player.cultivation / player.maxCultivation * 100))
   const flame = computed(() => ({ count: flameDamageProfile(player).parts.length, cultivation: flameBonuses(player).cultivation }))
   const logs = computed(() => world.logs.filter(entry => ['realm', 'npc', 'flame', 'system'].includes(entry.type)))
-  const modeNames = { idle: '尚未挂机', hunt: '自动打怪中', cultivate: '自动修炼中', both: '打怪与修炼同修中' }
   const stages = [{ name: '斗之气', level: 0 }, { name: '斗者', level: 9 }, { name: '斗师', level: 18 }, { name: '大斗师', level: 27 }, { name: '斗灵', level: 36 }, { name: '斗王', level: 45 }, { name: '斗皇', level: 54 }, { name: '斗宗', level: 63 }, { name: '斗尊', level: 72 }, { name: '九转斗尊', level: 81 }, { name: '半圣', level: 90 }, { name: '斗圣', level: 93 }, { name: '斗帝', level: 102 }]
   const reincarnate = async () => {
-    if (hasActiveTrial(player) || world.encounter) return ElMessage('请先结束战斗或退出试炼')
+    if (hasActiveTrial(player) || world.encounter) return notifyFailure('请先结束战斗或退出试炼')
     const kills = Math.max(1, player.reincarnation) * 100
-    if (player.level < maxLv) return ElMessage('达到斗帝后方可转生')
-    if (player.points > 0) return ElMessage('请先在洞府分配所有境界点')
-    if (player.taskNum < kills) return ElMessage('转生需要本轮累计击败 ' + kills + ' 只魔兽')
+    if (player.level < maxLv) return notifyFailure('达到斗帝后方可转生')
+    if (player.points > 0) return notifyFailure('请先在洞府分配所有境界点')
+    if (player.taskNum < kills) return notifyFailure('转生需要本轮累计击败 ' + kills + ' 只魔兽')
     try {
       await ElMessageBox.confirm('转生将重置境界和修为，增加 50 格行囊容量，敌人也会变强。装备、法宝、属性和异火保留。', '转生突破', { confirmButtonText: '确认转生', cancelButtonText: '继续修行' })
       setAutomation(player, 'idle')

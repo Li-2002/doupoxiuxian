@@ -3,6 +3,7 @@ import { trials, herbSeeds, combatSkills, wildEventTypes } from './worldContent.
 import { enemyAttributes, calculateStrike, applyCompanionBalance, clamp } from './balance.js'
 import { addWorldLog, gainCultivation, currentMap, grantFlame } from './worldProgress.js'
 import { levelNames } from './realms.js'
+import { addHerbs, spendHerbs, healWithHerb, initializeHerbs } from './herbs.js'
 
 export const hasActiveTrial = player => ['fighting', 'ready'].includes(player.world.trial?.status)
 export const meetNpc = (player, id) => {
@@ -13,7 +14,8 @@ export const meetNpc = (player, id) => {
 export const changeAffinity = (player, id, amount) => {
   const relation = meetNpc(player, id)
   if (!relation) return 0
-  relation.affinity = clamp(relation.affinity + amount, 0, 1000)
+  const current = knownNpcRows(player).find(npc => npc.id === id)?.affinity ?? relation.affinity
+  relation.affinity = clamp(current + amount, 0, 1000)
   player.world.relationships[id] = relation.affinity
   return relation.affinity
 }
@@ -32,23 +34,30 @@ export const knownNpcRows = player => {
   return rows.sort((a, b) => b.affinity - a.affinity)
 }
 
+export const GIFT_COOLDOWN = 60000
+export const giftAffinity = { money: 4, herbs: 7 }
+export const npcGiftCost = player => 30 * (1 + Math.floor(player.level / 9))
+export const giftCooldownRemaining = (relation, now = Date.now()) =>
+  relation.lastGiftAt ? Math.max(0, Math.ceil((GIFT_COOLDOWN - (now - relation.lastGiftAt)) / 1000)) : 0
+
 export const giveNpcGift = (player, id, kind = 'money', now = Date.now()) => {
   const relation = player.world.social[id]
   if (!relation) return '尚未结识这位 NPC'
-  if (hasActiveTrial(player) || player.world.encounter) return '请先结束战斗再赠礼'
-  if (relation.affinity >= 1000) return '好感已满'
-  if (now - relation.lastGiftAt < 30000) return '刚刚赠过礼，请稍后再来（间隔 30 秒）'
-  const cost = 30 * (1 + Math.floor(player.level / 9))
+  if (!giftAffinity[kind]) return '请选择灵石或药草赠礼'
+  if (hasActiveTrial(player)) return '请先退出试炼再赠礼'
+  if (knownNpcRows(player).find(npc => npc.id === id)?.affinity >= 1000) return '好感已满'
+  const remaining = giftCooldownRemaining(relation, now)
+  if (remaining) return `刚刚赠过礼，请稍后再来（还需 ${remaining} 秒）`
+  const cost = npcGiftCost(player)
   if (kind === 'herbs') {
-    if (player.world.garden.herbs < 2) return '需要 2 份药草'
-    player.world.garden.herbs -= 2
+    if (!spendHerbs(player, 2)) return '需要 2 份药草'
   } else {
     if (player.props.money < cost) return `需要 ${cost} 灵石`
     player.props.money -= cost
   }
   relation.lastGiftAt = now
-  changeAffinity(player, id, kind === 'herbs' ? 35 : 20)
-  addWorldLog(player, `赠礼${worldNpcs.find(npc => npc.id === id).name}，好感 +${kind === 'herbs' ? 35 : 20}。`, 'npc')
+  changeAffinity(player, id, giftAffinity[kind])
+  addWorldLog(player, `赠礼${worldNpcs.find(npc => npc.id === id).name}，好感 +${giftAffinity[kind]}。`, 'npc')
   return ''
 }
 
@@ -84,13 +93,13 @@ export const createWildEvent = (player, random = Math.random) => {
 export const opportunityChoices = player => {
   const kind = player.world.opportunity?.kind || 'meeting'
   if (kind === 'meeting') return [
-    { id: 'learn', label: '请教修行', detail: '修为 +15%，恢复 20% 气血，好感 +15' },
-    { id: 'trade', label: '交易强化石', detail: '支付灵石换 4 枚强化石，好感 +15' },
-    { id: 'clue', label: '打听异火', detail: '提高本区域随机异火概率，好感 +10' }
+    { id: 'learn', label: '请教修行', detail: '修为 +15%，恢复 20% 气血，好感 +3' },
+    { id: 'trade', label: '交易强化石', detail: '支付灵石换 4 枚强化石，好感 +3' },
+    { id: 'clue', label: '打听异火', detail: '提高本区域随机异火概率，好感 +2' }
   ]
   return [
-    { id: 'help', label: kind === 'rescue' ? '出手救援' : kind === 'escort' ? '护送商旅' : kind === 'herbs' ? '协助采药' : '并肩探险', detail: ['rescue', 'escort', 'ruins'].includes(kind) ? '需要战斗，获胜好感 +60～90' : '消耗 10% 气血，获得药草与好感 +35' },
-    { id: 'pay', label: '赠资解困', detail: '支付灵石，好感 +25' },
+    { id: 'help', label: kind === 'rescue' ? '出手救援' : kind === 'escort' ? '护送商旅' : kind === 'herbs' ? '协助采药' : '并肩探险', detail: ['rescue', 'escort', 'ruins'].includes(kind) ? '需要战斗，获胜好感 +12～18' : '消耗 10% 气血，获得药草与好感 +7' },
+    { id: 'pay', label: '赠资解困', detail: '支付灵石，好感 +5' },
     { id: 'leave', label: '暂不介入', detail: '继续历练' }
   ]
 }
@@ -106,23 +115,23 @@ export const resolveOpportunity = (player, choice) => {
   if (choice === 'trade') {
     player.props.money -= cost
     player.props[stoneTiers[currentMap(player).stone].key] += 4
-    changeAffinity(player, npc.id, 15)
+    changeAffinity(player, npc.id, 3)
   } else if (choice === 'pay') {
     player.props.money -= cost
-    changeAffinity(player, npc.id, 25)
+    changeAffinity(player, npc.id, 5)
   } else if (choice === 'learn') {
     gainCultivation(player, player.maxCultivation * 0.15)
     player.health = Math.min(player.maxHealth, player.health + Math.round(player.maxHealth * 0.2))
-    changeAffinity(player, npc.id, 15)
+    changeAffinity(player, npc.id, 3)
   } else if (choice === 'clue') {
     player.world.clues[event.mapId] = (player.world.clues[event.mapId] || 0) + 3
-    changeAffinity(player, npc.id, 10)
+    changeAffinity(player, npc.id, 2)
   } else if (event.kind === 'herbs') {
     player.health = Math.max(1, player.health - Math.round(player.maxHealth * 0.1))
-    player.world.garden.herbs += 2
-    changeAffinity(player, npc.id, 35)
+    addHerbs(player, 'grass', 2)
+    changeAffinity(player, npc.id, 7)
   } else {
-    const favor = { rescue: 90, escort: 60, ruins: 75 }[event.kind] || 60
+    const favor = { rescue: 18, escort: 12, ruins: 15 }[event.kind] || 12
     player.world.encounter = { ...enemyAttributes(event.level, { health: 1.05, attack: 1, defense: 0.8 }),
       name: event.kind === 'rescue' ? '拦路恶徒' : event.kind === 'escort' ? '伏道魔兽' : '洞府守卫',
       rounds: 0, kind: 'event', event: { npc: npc.id, favor } }
@@ -153,49 +162,50 @@ export const plantHerb = (player, index, seedId, now = Date.now()) => {
   return ''
 }
 export const harvestHerb = (player, index, now = Date.now(), random = Math.random) => {
-  if (hasActiveTrial(player) || player.world.encounter) return '请先结束战斗再收获药草'
   const garden = player.world.garden
   const plot = garden.plots[index]
   if (!plot || now < plot.readyAt) return '药草尚未成熟'
   const seed = herbSeeds.find(item => item.id === plot.seed)
   garden.plots[index] = null
-  garden.herbs += seed.yield
+  addHerbs(player, seed.id, seed.yield)
   garden.harvests++
-  gainCultivation(player, player.maxCultivation * 0.025)
+  garden.pendingCultivation += Math.floor(player.maxCultivation * 0.025)
+  settleGardenCultivation(player)
   if (!garden.visitor && random() < 0.12) {
     garden.visitor = { arrivedAt: now }
     meetNpc(player, 'huanong')
     addWorldLog(player, '药香引来华农老人。他愿以草木之道考验你的心性。', 'npc')
   }
-  addWorldLog(player, `收获${seed.name}，获得 ${seed.yield} 份药草。`, 'loot')
+  addWorldLog(player, `收获${seed.name}，获得 ${seed.yield} 份药草，已存入背包。`, 'loot')
   return ''
 }
+export const settleGardenCultivation = player => {
+  if (hasActiveTrial(player) || player.world.encounter || !player.world.garden.pendingCultivation) return
+  const amount = player.world.garden.pendingCultivation
+  player.world.garden.pendingCultivation = 0
+  gainCultivation(player, amount)
+}
 export const helpGardenVisitor = (player, random = Math.random) => {
+  if (hasActiveTrial(player)) return '请先退出试炼再接受考验'
   const garden = player.world.garden
   if (!garden.visitor) return '华农老人尚未到访'
-  if (garden.herbs < 6) return '需要 6 份药草完成考验'
-  garden.herbs -= 6
+  if (!spendHerbs(player, 6)) return '需要 6 份药草完成考验'
   garden.visitor = null
-  changeAffinity(player, 'huanong', 45)
+  changeAffinity(player, 'huanong', 9)
   if (random() < 0.18 && grantFlame(player, 'life', 'garden')) return '华农老人认可了你的用心，赠予生灵之焱火种！'
   player.props.money += 60
   addWorldLog(player, '通过华农老人的考验，获赠 60 灵石；这次没有获得异火。', 'npc')
   return '考验完成，获得 60 灵石；这次没有获得异火。'
 }
-export const useHerbs = (player, action) => {
-  const garden = player.world.garden
+export const useHerbs = (player, action, id) => {
   if (hasActiveTrial(player) || player.world.encounter) return '战斗期间无法使用药草'
-  if (action === 'heal') {
-    if (garden.herbs < 1) return '药草不足'
-    if (player.health >= player.maxHealth) return '气血已经恢复'
-    garden.herbs--
-    player.health = Math.min(player.maxHealth, player.health + Math.round(player.maxHealth * 0.15))
-  } else {
-    const count = Math.min(5, garden.herbs)
-    if (!count) return '药草不足'
-    garden.herbs -= count
-    player.props.money += count * 8
-  }
+  if (action === 'heal') return healWithHerb(player, id)
+  if (action !== 'sell') return '请选择使用或出售药草'
+  initializeHerbs(player)
+  const seed = id ? herbSeeds.find(item => item.id === id) : herbSeeds.find(item => player.props[item.key] > 0)
+  const count = Math.min(5, seed ? player.props[seed.key] : 0)
+  if (!count || !spendHerbs(player, count, seed.id)) return '药草不足'
+  player.props.money += count * seed.sell
   return ''
 }
 

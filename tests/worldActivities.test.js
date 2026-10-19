@@ -90,7 +90,8 @@ test('试炼期间挂机、营地、药草和斗技修习不会额外治疗或�
   startTrial(p, 'lotus-trial')
   p.health -= 500
   const before = { health: p.health, cultivation: p.cultivation, attack: p.attack }
-  setAutomation(p, 'both')
+  setAutomation(p, 'hunt')
+  setAutomation(p, 'cultivate')
   p.world.lastTick = 1000
   advanceWorld(p, 21000)
   assert.deepEqual({ health: p.health, cultivation: p.cultivation, attack: p.attack }, before)
@@ -100,8 +101,10 @@ test('试炼期间挂机、营地、药草和斗技修习不会额外治疗或�
   assert.match(useHerbs(p, 'heal'), /战斗/)
   assert.match(trainSkill(p, 'wave'), /先结束/)
   p.world.garden.plots[0] = { seed: 'grass', plantedAt: 0, readyAt: 1 }
-  assert.match(harvestHerb(p, 0, 2), /先结束/)
-  assert.equal(p.world.garden.herbs, 20)
+  assert.equal(harvestHerb(p, 0, 2, () => 0.9), '')
+  assert.equal(p.world.garden.herbs, 23)
+  assert.ok(p.world.garden.pendingCultivation > 0)
+  assert.deepEqual({ health: p.health, cultivation: p.cultivation, attack: p.attack }, before)
 })
 
 test('斗尊之前绝不遭遇吞炎魔影；达到斗尊仍需随机遭遇且战胜后随机获得', () => {
@@ -171,14 +174,14 @@ test('野外救援须战胜才能增加额外好感，失利不发放奖励', ()
   assert.equal(p.world.encounter.name, '拦路恶徒')
   p.attack = 9999
   explorationStep(p, () => 0.5)
-  assert.equal(p.world.social.xuner.affinity, 90)
+  assert.equal(p.world.social.xuner.affinity, 18)
   assert.equal(p.world.eventWins, 1)
   p.world.opportunity = { kind: 'escort', npc: 'xuner', mapId: 'mountains', level: 9 }
   resolveOpportunity(p, 'help')
   p.world.encounter.attack = 999999
   p.attack = 1
   explorationStep(p, () => 0.5)
-  assert.equal(p.world.social.xuner.affinity, 90)
+  assert.equal(p.world.social.xuner.affinity, 18)
 })
 
 test('五种野外事件均可生成，赠礼有冷却且认识的旧 NPC 全部进入好感表', () => {
@@ -194,7 +197,7 @@ test('五种野外事件均可生成，赠礼有冷却且认识的旧 NPC 全部
   assert.equal(p.props.money, money)
   p.npcs.push({ name: '旧相识', favorability: 450 })
   const rows = knownNpcRows(p)
-  assert.ok(rows.some(row => row.name === '古薰儿' && row.affinity === 20))
+  assert.ok(rows.some(row => row.name === '古薰儿' && row.affinity === 4))
   assert.ok(rows.some(row => row.name === '旧相识' && row.affinity === 450))
 })
 

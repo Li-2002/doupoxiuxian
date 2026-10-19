@@ -26,6 +26,7 @@
       </div>
       <div class="tag attribute">炼器等级: {{ strengthenInfo.strengthen ?? 0 }}</div>
       <div class="tag attribute">装备评分: {{ formatNumberToChineseUnit(strengthenInfo.score) }}</div>
+      <div v-if="isExclusiveEquipment(strengthenInfo)" class="tag attribute">异火共鸣: {{ strengthenInfo.flameCount || 0 }} 道 · +{{ (exclusiveFlameBonus(strengthenInfo.flameCount) * 100).toFixed(1) }}%</div>
       <div
         class="tag attribute"
         @click="
@@ -51,6 +52,8 @@
 <script setup>
   import { formatNumberToChineseUnit, gameNotifys } from '@/plugins/game'
   import { defineProps, defineOptions } from 'vue'
+  import { isExclusiveEquipment } from '@/plugins/equipmentContent'
+  import { exclusiveFlameBonus } from '@/plugins/balance'
 
   // 定义组件名称
   defineOptions({

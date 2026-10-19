@@ -1,10 +1,12 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { makePlayer, makeItem, seededRandom } from './fixtures.js'
-import { applyEquipmentBalance, equipmentAttributes, combatScore, calculateStrike } from '../src/plugins/balance.js'
+import { applyEquipmentBalance, equipmentAttributes, combatScore, calculateStrike, syncExclusiveEquipment, exclusiveFlameBonus } from '../src/plugins/balance.js'
 import { initializeWorld, strengthenEquipment } from '../src/plugins/douqi.js'
 import equip from '../src/plugins/equip.js'
 import equipAll from '../src/plugins/equipAll.js'
+import { heavenlyFlames } from '../src/plugins/douqiWorld.js'
+import { grantFlame } from '../src/plugins/worldProgress.js'
 import { exclusiveEquipment, isExclusiveEquipment } from '../src/plugins/equipmentContent.js'
 import { createStarterPack, claimStarterPack, redeemExclusiveSet, craftEquipment, craftCost,
   ascendEquipment, ascensionCost, transferEnhancement, transferCost } from '../src/plugins/equipmentGrowth.js'
@@ -199,9 +201,12 @@ test('专属可正常强化；战斗、锁定传承来源、类型不符与材�
 test('失败操作原子性：升境、传承材料不足及异槽传承均不扣费，背包满不打造', () => {
   const p = funded(63)
   const source = makeItem('weapon', 1, 'danger', 20)
-  const target = makeItem('weapon', 1)
+  redeemExclusiveSet(p, 'dwdldhsglqfkssjqd')
+  const target = p.inventory[0]
+  target.level = 1
+  applyEquipmentBalance(target)
   const armor = makeItem('armor', 1, 'danger', 30)
-  p.inventory.push(source, target, armor)
+  p.inventory = [source, target, armor]
   const original = JSON.stringify(p)
   assert.match(transferEnhancement(p, target, armor), /同部位/)
   assert.equal(JSON.stringify(p), original)
@@ -219,7 +224,12 @@ test('失败操作原子性：升境、传承材料不足及异槽传承均不�
 test('100次往返传承与穿戴升境不叠加属性、不制造强化等级或治疗', () => {
   const p = funded(63)
   const source = makeItem('armor', 63, 'danger', 30)
-  const target = makeItem('armor', 1, 'danger', 0)
+  redeemExclusiveSet(p, 'dwdldhsglqfkssjqd')
+  const target = p.inventory.find(item => item.type === 'armor')
+  p.inventory = p.inventory.filter(item => item !== target)
+  target.level = 1
+  target.lock = false
+  applyEquipmentBalance(target)
   p.equipment.armor = target
   p.defense += target.defense
   p.maxHealth += target.health
@@ -235,4 +245,76 @@ test('100次往返传承与穿戴升境不叠加属性、不制造强化等级�
   const saved = JSON.parse(JSON.stringify(p))
   initializeWorld(saved)
   assert.deepEqual({ defense: saved.defense, maxHealth: saved.maxHealth, health: saved.health }, snapshot)
+})
+
+test('普通装备只有强化成长，不接受境界提升且不随异火变化；失败不扣资源', () => {
+  const p = funded(63)
+  const item = makeItem('weapon', 1, 'danger', 15)
+  p.inventory.push(item)
+  const before = JSON.stringify(p)
+  assert.match(ascendEquipment(p, item), /普通装备仅可强化/)
+  assert.equal(JSON.stringify(p), before)
+  const attrs = JSON.stringify(item)
+  p.world.flames = heavenlyFlames.map(fire => ({ id: fire.id, refined: true }))
+  syncExclusiveEquipment(p)
+  assert.equal(JSON.stringify(item), attrs)
+})
+
+test('获得异火即同步穿戴和背包专属成长，重复火种不叠加、无额外治疗、重新载入幂等', () => {
+  const p = funded(63)
+  redeemExclusiveSet(p, 'dwdldhsglqfkssjqd')
+  const weapon = p.inventory.shift()
+  p.equipment.weapon = weapon
+  p.attack += weapon.attack
+  p.critical += weapon.critical
+  p.health = 100
+  const initialAttack = p.attack
+  assert.equal(grantFlame(p, 'xuanhuang', 'wild'), true)
+  assert.equal(weapon.flameCount, 1)
+  assert.ok(p.attack > initialAttack)
+  assert.ok(p.inventory.every(item => item.flameCount === 1))
+  assert.equal(p.health, 100)
+  const snapshot = JSON.stringify(p)
+  assert.equal(grantFlame(p, 'xuanhuang', 'wild'), false)
+  assert.equal(JSON.stringify(p), snapshot)
+  for (let i = 0; i < 100; i++) syncExclusiveEquipment(p)
+  assert.equal(JSON.stringify(p), snapshot)
+  const saved = JSON.parse(snapshot)
+  initializeWorld(saved)
+  assert.equal(saved.attack, p.attack)
+  assert.equal(saved.equipment.weapon.attack, weapon.attack)
+})
+
+test('102个境界、0至23道异火：专属成长线性有界，暴击闪避不成长，强化仍封顶30', () => {
+  for (let level = 1; level <= 102; level++) {
+    for (const entry of exclusiveEquipment) {
+      const item = { ...entry, id: entry.id, exclusiveId: entry.id, level, quality: 'danger', strengthen: 30 }
+      const ordinary = equipmentAttributes({ ...item, exclusiveId: undefined, id: 'n' })
+      let previous = { attack: 0, defense: 0, health: 0 }
+      for (let count = 0; count <= 23; count++) {
+        item.flameCount = count
+        applyEquipmentBalance(item)
+        const ratio = 1.1 + count * 0.005
+        for (const key of ['attack','defense','health']) {
+          assert.ok(Math.abs(item.initial[key] - ordinary[key] * ratio) <= 1.2)
+          assert.ok(item[key] >= previous[key])
+          assert.equal(item[key], Math.round(item.initial[key] * 2.2))
+        }
+        assert.equal(item.critical, ordinary.critical)
+        assert.equal(item.dodge, ordinary.dodge)
+        previous = { ...item }
+      }
+      const capped = item.attack
+      item.flameCount = 100000
+      item.strengthen = 100000
+      applyEquipmentBalance(item)
+      assert.equal(item.attack, capped)
+      assert.equal(item.strengthen, 30)
+    }
+  }
+  assert.equal(exclusiveFlameBonus(23), 0.115)
+  const p = funded(63)
+  p.world.flames = [{ id:'xuanhuang' }, { id:'xuanhuang' }, { id:'invalid' }]
+  redeemExclusiveSet(p, 'dwdldhsglqfkssjqd')
+  assert.ok(p.inventory.every(item => item.flameCount === 1))
 })

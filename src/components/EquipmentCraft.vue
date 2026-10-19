@@ -1,7 +1,7 @@
 <template>
   <div class="equipment-craft">
     <h3>分解旧物，定向铸器</h3>
-    <p class="muted">在洞府分解闲置装备获取炼器石。选择部位与品质，必定获得当前境界的普通装备，名称和小幅属性浮动随机。专属四件套无法打造。</p>
+    <p class="muted">选择部位与品质，消耗材料打造当前境界的普通装备。</p>
     <p>灵石 {{ player.props.money.toLocaleString() }} · 炼器石 {{ player.props.strengtheningStone.toLocaleString() }}</p>
     <div class="craft-options">
       <label>装备部位<el-select v-model="type" aria-label="打造装备部位"><el-option v-for="(name, id) in genre" :key="id" :value="id" :label="name" /></el-select></label>
@@ -21,6 +21,7 @@
   import { useMainStore } from '@/plugins/store'
   import { craftingQualities } from '@/plugins/equipmentContent'
   import { craftCost, craftEquipment } from '@/plugins/equipmentGrowth'
+  import { operationFeedback } from '@/plugins/feedback'
   import { genre, levels, levelNames } from '@/plugins/game'
   import ExclusiveRedeem from './ExclusiveRedeem.vue'
   const player = useMainStore().player
@@ -28,7 +29,10 @@
   const quality = ref('info')
   const feedback = ref('')
   const cost = computed(() => craftCost(player, quality.value))
-  const craft = () => { feedback.value = craftEquipment(player, type.value, quality.value) || '打造成功：「' + player.inventory.at(-1).name + '」已存入行囊。' }
+  const craft = () => {
+    const error = craftEquipment(player, type.value, quality.value)
+    feedback.value = operationFeedback(error, error ? '' : '打造成功：「' + player.inventory.at(-1).name + '」已存入行囊。')
+  }
 </script>
 <style scoped>
   .equipment-craft { max-width: 800px; padding: 12px 0; }

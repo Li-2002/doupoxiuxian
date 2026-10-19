@@ -1,5 +1,5 @@
 import equip from './equip.js'
-import { applyEquipmentBalance, combatScore, clamp } from './balance.js'
+import { applyEquipmentBalance, combatScore, clamp, syncExclusiveEquipment } from './balance.js'
 import { exclusiveEquipment, isExclusiveEquipment, craftingQualities } from './equipmentContent.js'
 import { stoneTiers } from './douqiWorld.js'
 import { hasActiveTrial } from './worldActivities.js'
@@ -43,6 +43,7 @@ export const redeemExclusiveSet = (player, code) => {
     level: gearLevel(player), quality: 'danger', strengthen: 0, lock: true
   }))
   player.inventory.push(...items)
+  syncExclusiveEquipment(player)
   player.world.exclusiveRedeemed = true
   addWorldLog(player, '专属四件套已存入行囊并锁定：文葬镰刀、监兵凶神、火链、人皇幡。', 'equipment')
   return ''
@@ -102,6 +103,7 @@ const updateWorn = (player, changes) => {
 export const ascendEquipment = (player, item) => {
   if (combatGuard(player)) return combatGuard(player)
   if (!owns(player, item)) return '装备不存在'
+  if (!isExclusiveEquipment(item)) return '普通装备仅可强化，只有专属装备可以提升境界'
   const cost = ascensionCost(player, item)
   if (item.level >= cost.target) return '装备已达到当前境界，无需提升'
   const error = pay(player, cost)

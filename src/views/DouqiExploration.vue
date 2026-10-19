@@ -25,9 +25,10 @@
         <section class="travel-panel">
           <div class="travel-top"><div><h3>{{ world.resting ? '营地疗伤' : world.encounter ? `交战 · ${world.encounter.name}` : '整装待发' }}</h3><p class="muted">{{ world.resting ? '恢复至满血后自动继续，战败不会损失装备。' : world.encounter ? `${levelNames(world.encounter.level)} · 第 ${world.encounter.rounds} 回合` : '每 2 秒推进一次历练，遇敌自动战斗，低血量自动回营。' }}</p></div><span class="realm-badge">{{ levelNames(player.level) }}</span></div>
           <div class="vital-bars"><div><span>你的气血 <b>{{ number(player.health) }} / {{ number(player.maxHealth) }}</b></span><el-progress :percentage="healthPercent" :show-text="false" color="#669b80" /></div><div v-if="world.encounter"><span>{{ world.encounter.name }} <b>{{ number(world.encounter.health) }} / {{ number(world.encounter.maxHealth) }}</b></span><el-progress :percentage="world.encounter.health / world.encounter.maxHealth * 100" :show-text="false" color="#c48164" /></div><div v-else><span>修为进度 <b>{{ cultivationPercent.toFixed(1) }}%</b></span><el-progress :percentage="cultivationPercent" :show-text="false" color="#b28e4c" /></div></div>
-          <CombatBreakdown :attack="world.lastAttack" /><div class="automation-controls"><el-radio-group :model-value="world.mode" @update:model-value="mode => setAutomation(player, mode)"><el-radio-button value="idle">手动</el-radio-button><el-radio-button value="hunt">自动打怪</el-radio-button><el-radio-button value="cultivate">自动修炼</el-radio-button><el-radio-button value="both">打怪 + 修炼</el-radio-button></el-radio-group><el-button type="primary" :disabled="hasActiveTrial(player) || world.mode === 'hunt' || world.mode === 'both'" @click="manualExplore">{{ world.resting ? '营地疗伤' : '历练一场' }}</el-button></div>
+          <CombatBreakdown :attack="world.lastAttack" /><div class="automation-controls"><el-radio-group :model-value="world.mode" @update:model-value="mode => operationFeedback(setAutomation(player, mode))"><el-radio-button value="idle">手动</el-radio-button><el-radio-button value="hunt">自动打怪</el-radio-button><el-radio-button value="cultivate">自动修炼</el-radio-button></el-radio-group><el-button type="primary" :disabled="hasActiveTrial(player) || world.mode !== 'idle'" @click="manualExplore">{{ world.resting ? '营地疗伤' : '历练一场' }}</el-button></div>
+          <p class="automation-state" :class="{ active: world.mode !== 'idle' }">{{ automationStatus(player) }}</p>
           <div class="automation-options"><el-checkbox v-model="world.autoNpc">挂机时自动处理野外事件</el-checkbox><el-checkbox v-model="world.autoSalvage">背包满时分解新掉落</el-checkbox></div>
-          <p class="muted travel-note">挂机可跨页面运行，离线最多结算 4 小时。机缘手动处理时会等待选择；传统战斗期间暂停自动打怪。</p>
+          <p class="muted travel-note">药草 {{ world.garden.herbs }} 份 · 自动打怪时，气血不高于 50% 自动服药，间隔 6 秒。</p>
         </section>
         <section class="opportunity-panel" v-if="opportunityNpc">
           <span class="encounter-seal">缘</span><div><small>{{ opportunityNpc.title }} · {{ wildEventTypes[world.opportunity.kind || 'meeting'].name }}</small><h3>路遇 {{ opportunityNpc.name }}</h3><p>{{ wildEventTypes[world.opportunity.kind || 'meeting'].text }}</p><div class="opportunity-actions"><el-button v-for="choice in opportunityChoices(player)" :key="choice.id" :disabled="['trade', 'pay'].includes(choice.id) && player.props.money < tradeCost" @click="resolveOpportunity(player, choice.id)">{{ choice.label }} · {{ choice.detail }}{{ ['trade', 'pay'].includes(choice.id) ? '（' + tradeCost + ' 灵石）' : '' }}</el-button><router-link class="quiet-link" to="/adventures?tab=affinity">查看好感度</router-link></div></div>
@@ -43,10 +44,11 @@
   import { computed } from 'vue'
   import { useMainStore } from '@/plugins/store'
   import { worldMaps, stoneTiers, worldNpcs } from '@/plugins/douqiWorld'
-  import { currentMap, selectMap, setAutomation, explorationStep, resolveOpportunity } from '@/plugins/douqi'
+  import { currentMap, selectMap, setAutomation, explorationStep, resolveOpportunity, automationStatus } from '@/plugins/douqi'
   import { opportunityChoices, hasActiveTrial } from '@/plugins/worldActivities'
   import { wildEventTypes } from '@/plugins/worldContent'
   import CombatBreakdown from '@/components/CombatBreakdown.vue'
+  import { operationFeedback } from '@/plugins/feedback'
   import { levelNames, maxLv } from '@/plugins/game'
   const player = useMainStore().player
   const world = player.world

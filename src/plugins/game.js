@@ -51,7 +51,10 @@ export const propItemNames = {
   earthStone: { name: '地阶强化石', desc: '迦南学院、云岚山掉落，用于 +10 至 +14 强化' },
   heavenStone: { name: '天阶强化石', desc: '落神涧、丹域星空掉落，用于 +15 至 +19 强化' },
   saintStone: { name: '圣阶强化石', desc: '远古兽域、远古遗迹掉落，用于 +20 至 +24 强化' },
-  emperorStone: { name: '帝阶强化石', desc: '古帝洞府掉落，用于 +25 至 +29 强化' }
+  emperorStone: { name: '帝阶强化石', desc: '古帝洞府掉落，用于 +25 至 +29 强化' },
+  bloodGrass: { name: '凝血草', desc: '回复最大气血的15%；自动打怪时低血量自动服用，也可在药圃使用' },
+  iceFlameGrass: { name: '冰灵焰草', desc: '回复最大气血的25%；自动打怪时低血量自动服用，也可在药圃使用' },
+  soulDew: { name: '养魂涎', desc: '回复最大气血的35%；自动打怪时低血量自动服用，也可在药圃使用' }
 }
 
 export const formatNumberToChineseUnit = number => {

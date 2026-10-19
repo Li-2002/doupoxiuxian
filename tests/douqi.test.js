@@ -106,9 +106,12 @@ test('挂机打怪能击杀并掉落强化石、灵石、修为；战败自动�
   assert.equal(p.world.resting, false)
 })
 
-test('传统战斗期间暂停自动打怪，同修仍可增长修为', () => {
+test('传统战斗期间暂停自动打怪，独立修炼只增长修为', () => {
   const p = player()
-  setAutomation(p, 'both', 1000)
+  setAutomation(p, 'hunt', 1000)
+  advanceWorld(p, 21000, false)
+  assert.equal(p.cultivation, 0)
+  setAutomation(p, 'cultivate', 1000)
   advanceWorld(p, 21000, false)
   assert.ok(p.cultivation > 0)
   assert.equal(p.world.encounter, null)
@@ -123,7 +126,7 @@ test('NPC 事件等待手动选择，交易不足不扣费，线索与交情持�
   assert.equal(p.props.money, 0)
   assert.equal(resolveOpportunity(p, 'clue'), true)
   assert.equal(p.world.clues.wutan, 3)
-  assert.equal(p.world.relationships.xuner, 10)
+  assert.equal(p.world.relationships.xuner, 2)
   assert.equal(p.world.opportunity, null)
 })
 

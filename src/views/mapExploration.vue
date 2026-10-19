@@ -272,7 +272,7 @@
     for (let i = 1; i < 7; i++) {
       arr.push({
         lv: lv[i],
-        plus: price[i] / 100,
+        plus: Math.max(1, Math.round(price[i] / 500)),
         name: `${num[i]}品驻颜丹`,
         price: price[i]
       })

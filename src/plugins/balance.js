@@ -5,6 +5,7 @@ import { isExclusiveEquipment } from './equipmentContent.js'
 export const BALANCE_VERSION = 2
 export const ENHANCE_STEP = 0.04
 export const MAX_FLAME_BONUS = 0.55
+export const EXCLUSIVE_FLAME_STEP = 0.005
 export const clamp = (value, min, max) => Math.min(max, Math.max(min, Number(value) || 0))
 export const combatScore = actor => Math.round(actor.attack * 1.5 + actor.defense * 1.2 + (actor.maxHealth ?? actor.health) * 0.2 +
   (actor.attack + actor.defense) * (clamp(actor.critical, 0, 0.5) + clamp(actor.dodge, 0, 0.35)) * 0.2)
@@ -23,7 +24,7 @@ export const equipmentAttributes = item => {
   const base = baseAttributes(item.level)
   const quality = { info: 1, success: 1.18, primary: 1.38, purple: 1.6, warning: 1.85, danger: 2.1, pink: 2.35 }[item.quality] || 1
   const seed = [...String(item.id || item.name)].reduce((sum, char) => sum + char.charCodeAt(0), 0)
-  const roll = isExclusiveEquipment(item) ? 1.1 : 0.92 + seed % 17 / 100
+  const roll = isExclusiveEquipment(item) ? 1.1 + exclusiveFlameBonus(item.flameCount) : 0.92 + seed % 17 / 100
   const budgets = {
     weapon: { attack: 0.36, defense: 0, health: 0, critical: 0.015, dodge: 0 },
     armor: { attack: 0, defense: 0.36, health: 0.28, critical: 0, dodge: 0 },
@@ -46,6 +47,25 @@ export const applyEquipmentBalance = item => {
   item.balanceVersion = BALANCE_VERSION
   item.score = combatScore(item)
   return item
+}
+
+export const exclusiveFlameBonus = count => Math.floor(clamp(count, 0, heavenlyFlames.length)) * EXCLUSIVE_FLAME_STEP
+
+export const syncExclusiveEquipment = player => {
+  const count = heavenlyFlames.filter(fire => player.world.flames.some(owned => owned.id === fire.id)).length
+  for (const item of new Set([...Object.values(player.equipment), ...player.inventory])) {
+    if (!isExclusiveEquipment(item)) continue
+    const before = { attack: item.attack, defense: item.defense, health: item.health }
+    item.flameCount = count
+    applyEquipmentBalance(item)
+    if (player.equipment[item.type] === item) {
+      player.attack += item.attack - before.attack
+      player.defense += item.defense - before.defense
+      player.maxHealth += item.health - before.health
+    }
+  }
+  player.health = Math.min(player.health, player.maxHealth)
+  player.score = combatScore(player)
 }
 
 export const applyCompanionBalance = item => {

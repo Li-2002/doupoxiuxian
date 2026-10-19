@@ -9,7 +9,7 @@
     </div>
     <div v-if="!hasActiveTrial(player)" class="trial-entry">
       <div><h3>{{ chosen.name }}</h3><p class="muted">守关首领：{{ chosen.boss }} · {{ trialEnemy(chosen.id, chosen.rooms - 1).health.toLocaleString() }} 气血 · {{ trialEnemy(chosen.id, chosen.rooms - 1).attack.toLocaleString() }} 攻击 · {{ trialEnemy(chosen.id, chosen.rooms - 1).defense.toLocaleString() }} 防御</p></div>
-      <el-button type="primary" :disabled="player.level < chosen.min || !!world.encounter || !!world.opportunity" @click="begin">{{ player.level < chosen.min ? '境界尚未达到' : '进入试炼' }}</el-button>
+      <el-button type="primary" :disabled="player.level < chosen.min" @click="begin">{{ player.level < chosen.min ? '境界尚未达到' : '进入试炼' }}</el-button>
     </div>
     <section v-if="run" class="trial-arena" :class="run.status">
       <div class="section-title"><h3>{{ trials.find(item => item.id === run.id).name }}</h3><span>{{ statusNames[run.status] }} · 第 {{ run.stage + 1 }} / {{ trials.find(item => item.id === run.id).rooms }} 关</span></div>
@@ -19,7 +19,7 @@
       <div class="activity-actions" v-if="hasActiveTrial(player)"><el-button v-if="run.status === 'fighting'" type="primary" :disabled="run.auto" @click="trialStep(player)">施展斗技</el-button><el-button v-if="run.status === 'ready'" type="primary" :disabled="run.auto" @click="nextTrialStage(player)">进入下一关</el-button><el-button @click="run.auto = !run.auto">{{ run.auto ? '暂停自动战斗' : '自动战斗' }}</el-button><el-button @click="leaveTrial(player)">退出试炼</el-button></div>
       <p v-else class="muted">{{ run.status === 'cleared' ? '试炼完成，异火火种和通关奖励已存入存档。' : '可回营疗伤，调整装备与斗技后重新挑战。' }}</p>
     </section>
-    <div class="activity-actions"><el-button :disabled="hasActiveTrial(player) || !!world.encounter" @click="feedback = restAtCamp(player) || '恢复了 20% 气血'">营地疗伤</el-button><router-link class="quiet-link" to="/sanctum">查看异火图鉴与强化</router-link></div>
+    <div class="activity-actions"><el-button @click="feedback = operationFeedback(restAtCamp(player), '恢复了 20% 气血')">营地疗伤</el-button><router-link class="quiet-link" to="/sanctum">查看异火图鉴与强化</router-link></div>
     <p role="status" class="activity-feedback">{{ feedback }}</p>
   </div>
 </template>
@@ -31,6 +31,7 @@
   import { levelNames } from '@/plugins/game'
   import { startTrial, trialStep, nextTrialStage, leaveTrial, hasActiveTrial, trialEnemy, restAtCamp } from '@/plugins/worldActivities'
   import CombatBreakdown from './CombatBreakdown.vue'
+  import { operationFeedback } from '@/plugins/feedback'
   const props = defineProps({ group: String })
   const player = useMainStore().player
   const world = player.world
@@ -42,5 +43,5 @@
   const feedback = ref('')
   const fireName = id => heavenlyFlames.find(fire => fire.id === id).name
   const statusNames = { fighting: '交战中', ready: '已通过本关', cleared: '通关', failed: '挑战失败', left: '已退出' }
-  const begin = () => { feedback.value = startTrial(player, chosen.value.id) }
+  const begin = () => { feedback.value = operationFeedback(startTrial(player, chosen.value.id)) }
 </script>

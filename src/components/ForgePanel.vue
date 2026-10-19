@@ -2,7 +2,7 @@
   <div class="forge-panel" v-if="item?.name">
     <div class="forge-item-name"><tag :type="item.quality">{{ item.name }} +{{ item.strengthen || 0 }}</tag></div>
     <p>{{ genre[item.type] }} · {{ levelNames(item.level) }}</p>
-    <p v-if="isExclusiveEquipment(item)" class="muted">契印专属 · 标准红装主属性 +10% · 全程按固定公式计算</p>
+    <p v-if="isExclusiveEquipment(item)" class="muted">异火共鸣 {{ item.flameCount || 0 }} / 23 · 成长 +{{ (exclusiveFlameBonus(item.flameCount) * 100).toFixed(1) }}%</p>
     <div class="forge-stats">
       <span>攻击 <b>{{ item.attack }}</b></span><span>防御 <b>{{ item.defense }}</b></span>
       <span>气血 <b>{{ item.health }}</b></span><span>评分 <b>{{ item.score }}</b></span>
@@ -15,7 +15,7 @@
       <el-button type="primary" size="large" @click="enhance">强化至 +{{ (item.strengthen || 0) + 1 }}</el-button>
     </template>
     <p v-else>已达到强化上限 +30</p>
-    <section class="growth-section">
+    <section v-if="isExclusiveEquipment(item)" class="growth-section">
       <h3>装备境界提升</h3>
       <template v-if="item.level < ascent.target">
         <p>提升至 {{ levelNames(ascent.target) }}，保留品质、强化与专属身份。</p>
@@ -43,7 +43,9 @@
   import { enhancementCost, strengthenEquipment } from '@/plugins/douqi'
   import { genre, levelNames } from '@/plugins/game'
   import { isExclusiveEquipment } from '@/plugins/equipmentContent'
+  import { exclusiveFlameBonus } from '@/plugins/balance'
   import { ascendEquipment, ascensionCost, transferEnhancement, transferCost } from '@/plugins/equipmentGrowth'
+  import { operationFeedback } from '@/plugins/feedback'
   const props = defineProps({ item: Object })
   const player = useMainStore().player
   const feedback = ref('')
@@ -54,11 +56,11 @@
   const source = computed(() => sources.value.find(item => item.id === sourceId.value))
   const transfer = computed(() => transferCost(props.item, source.value))
   watch(() => props.item, () => { feedback.value = ''; sourceId.value = '' })
-  const enhance = () => { feedback.value = strengthenEquipment(player, props.item) || '强化成功' }
-  const ascend = () => { feedback.value = ascendEquipment(player, props.item) || '境界提升成功，属性已重新计算。' }
+  const enhance = () => { feedback.value = operationFeedback(strengthenEquipment(player, props.item), '强化成功') }
+  const ascend = () => { feedback.value = operationFeedback(ascendEquipment(player, props.item), '境界提升成功，属性已重新计算。') }
   const inherit = () => {
     const error = transferEnhancement(player, props.item, source.value)
-    feedback.value = error || '传承成功，来源装备强化已归零。'
+    feedback.value = operationFeedback(error, '传承成功，来源装备强化已归零。')
     if (!error) sourceId.value = ''
   }
 </script>

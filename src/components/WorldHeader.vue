@@ -8,7 +8,7 @@
     </nav>
   </header>
   <div class="world-status" v-if="player.world.mode !== 'idle'">
-    <span><i class="status-dot" />{{ modeNames[player.world.mode] }} · {{ levelNames(player.level) }}<span v-if="paused"> · 传统战斗期间暂停自动打怪</span></span>
+    <span role="status"><i class="status-dot" />{{ automationStatus(player, paused) }} · {{ levelNames(player.level) }}</span>
     <button class="text-button" @click="setAutomation(player, 'idle')">停止挂机</button>
   </div>
   <div class="world-status" v-if="player.world.trial && ['fighting', 'ready'].includes(player.world.trial.status)"><span>试炼进行中 · 第 {{ player.world.trial.stage + 1 }} 关 · {{ player.world.trial.auto ? '自动战斗' : '等待操作' }}</span><router-link :to="player.world.trial.id === 'danta' ? '/adventures?tab=danta' : '/adventures?tab=trials'">返回试炼</router-link></div>
@@ -17,10 +17,9 @@
   import { computed } from 'vue'
   import { useRoute } from 'vue-router'
   import { useMainStore } from '@/plugins/store'
-  import { setAutomation } from '@/plugins/douqi'
+  import { setAutomation, automationStatus } from '@/plugins/douqi'
   import { levelNames } from '@/plugins/game'
   const player = useMainStore().player
   const route = useRoute()
-  const modeNames = { hunt: '自动打怪中', cultivate: '自动修炼中', both: '打怪、修炼同修中' }
   const paused = computed(() => ['/explore', '/boss', '/endlesstower', '/wander', '/game'].includes(route.path) && player.world.mode !== 'cultivate')
 </script>
