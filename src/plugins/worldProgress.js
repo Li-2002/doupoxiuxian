@@ -8,7 +8,21 @@ export const addWorldLog = (player, text, type = 'normal') => {
   player.world.logs.length = Math.min(player.world.logs.length, 80)
 }
 
+export const initializeCapacity = player => {
+  if (player.world.capacityVersion === 1) return
+  player.backpackCapacity += player.level * 50
+  player.world.capacityVersion = 1
+}
+
+export const advanceAge = (player, elapsed) => {
+  player.world.ageElapsed = (player.world.ageElapsed || 0) + Math.max(0, elapsed)
+  const years = Math.floor(player.world.ageElapsed / 3600000)
+  player.age += years
+  player.world.ageElapsed %= 3600000
+}
+
 export const gainCultivation = (player, amount) => {
+  initializeCapacity(player)
   if (player.level >= maxLv) return 0
   const gain = Math.max(0, Math.floor(amount))
   player.cultivation += gain
@@ -17,6 +31,7 @@ export const gainCultivation = (player, amount) => {
     const before = baseAttributes(player.level, player.reincarnation)
     player.cultivation -= player.maxCultivation
     player.level++
+    player.backpackCapacity += 50
     player.points += 3
     const after = baseAttributes(player.level, player.reincarnation)
     player.attack += after.attack - before.attack
@@ -36,6 +51,6 @@ export const grantFlame = (player, id, source) => {
   if (!fire || fire.source.type !== source || player.world.flames.some(item => item.id === id)) return false
   player.world.flames.push({ id, refined: false, source, foundAt: Date.now() })
   syncExclusiveEquipment(player)
-  addWorldLog(player, `获得异火榜第 ${fire.rank}「${fire.name}」火种。炼化后，每次命中自动附带这道异火伤害。`, 'flame')
+  addWorldLog(player, `获得${fire.rank > 23 ? '奇遇异火' : '异火榜第 ' + fire.rank}「${fire.name}」火种。炼化后，每次命中自动附带这道异火伤害。`, 'flame')
   return true
 }

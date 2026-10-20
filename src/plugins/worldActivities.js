@@ -2,8 +2,9 @@ import { worldNpcs, stoneTiers } from './douqiWorld.js'
 import { trials, herbSeeds, combatSkills, wildEventTypes } from './worldContent.js'
 import { enemyAttributes, calculateStrike, applyCompanionBalance, clamp } from './balance.js'
 import { addWorldLog, gainCultivation, currentMap, grantFlame } from './worldProgress.js'
-import { levelNames } from './realms.js'
+import { levelNames, cultivationPerTick } from './realms.js'
 import { addHerbs, spendHerbs, healWithHerb, initializeHerbs } from './herbs.js'
+import { recordJourneyEvent, cultivationEfficiency } from './journey.js'
 
 export const hasActiveTrial = player => ['fighting', 'ready'].includes(player.world.trial?.status)
 export const meetNpc = (player, id) => {
@@ -16,6 +17,11 @@ export const changeAffinity = (player, id, amount) => {
   if (!relation) return 0
   const current = knownNpcRows(player).find(npc => npc.id === id)?.affinity ?? relation.affinity
   relation.affinity = clamp(current + amount, 0, 1000)
+  if (amount < 0) {
+    for (const item of [...(player.npcs || []), ...(player.wifes || []), player.wife]) {
+      if (item?.name === worldNpcs.find(npc => npc.id === id).name) item.favorability = relation.affinity
+    }
+  }
   player.world.relationships[id] = relation.affinity
   return relation.affinity
 }
@@ -80,7 +86,7 @@ export const formBond = (player, id) => {
 
 export const createWildEvent = (player, random = Math.random) => {
   const map = currentMap(player)
-  const kinds = Object.keys(wildEventTypes)
+  const kinds = Object.keys(wildEventTypes).filter(id => !wildEventTypes[id].map || (wildEventTypes[id].map === map.id && player.level >= wildEventTypes[id].min))
   const kind = kinds[Math.floor(random() * kinds.length)]
   const candidates = worldNpcs.filter(npc => npc.romantic && player.level >= (npc.min || 0))
   const npc = kind === 'meeting' ? (random() < 0.35 ? worldNpcs.find(item => item.id === 'xuner') : worldNpcs.find(item => item.id === map.npc))
@@ -92,19 +98,28 @@ export const createWildEvent = (player, random = Math.random) => {
 
 export const opportunityChoices = player => {
   const kind = player.world.opportunity?.kind || 'meeting'
+  const alternatives = [
+    { id: 'bargain', label: '索取报酬', detail: '好感 −6；30% 几率得到 1～2 枚本区强化石，可能空手而归' },
+    { id: 'leave', label: '暂不介入', detail: '好感不变，放弃这次机缘' }
+  ]
+  if (kind === 'insight' || kind === 'courier') return [
+    { id: wildEventTypes[kind].choice, label: kind === 'insight' ? '静心参悟' : '代送家书', detail: kind === 'insight' ? '好感不变；可能得到修炼异火，参悟 5 次必得' : '好感 +3；30% 几率获得灵石酬谢' },
+    ...alternatives
+  ]
   if (kind === 'meeting') return [
-    { id: 'learn', label: '请教修行', detail: '修为 +15%，恢复 20% 气血，好感 +3' },
+    { id: 'learn', label: '请教修行', detail: '获得修为（随境界和地点变化），恢复 20% 气血，好感 +3' },
     { id: 'trade', label: '交易强化石', detail: '支付灵石换 4 枚强化石，好感 +3' },
-    { id: 'clue', label: '打听异火', detail: '提高本区域随机异火概率，好感 +2' }
+    { id: 'clue', label: '打听异火', detail: '提高本区域随机异火概率，好感 +2' },
+    ...alternatives
   ]
   return [
     { id: 'help', label: kind === 'rescue' ? '出手救援' : kind === 'escort' ? '护送商旅' : kind === 'herbs' ? '协助采药' : '并肩探险', detail: ['rescue', 'escort', 'ruins'].includes(kind) ? '需要战斗，获胜好感 +12～18' : '消耗 10% 气血，获得药草与好感 +7' },
     { id: 'pay', label: '赠资解困', detail: '支付灵石，好感 +5' },
-    { id: 'leave', label: '暂不介入', detail: '继续历练' }
+    ...alternatives
   ]
 }
 
-export const resolveOpportunity = (player, choice) => {
+export const resolveOpportunity = (player, choice, random = Math.random) => {
   const event = player.world.opportunity
   if (!event || !opportunityChoices(player).some(item => item.id === choice)) return false
   const npc = worldNpcs.find(item => item.id === event.npc)
@@ -112,6 +127,31 @@ export const resolveOpportunity = (player, choice) => {
   if (['trade', 'pay'].includes(choice) && player.props.money < cost) return false
   player.world.opportunity = null
   if (choice === 'leave') { addWorldLog(player, `与${npc.name}暂别，继续赶路。`, 'npc'); return true }
+  if (choice === 'bargain') {
+    changeAffinity(player, npc.id, -6)
+    const count = random() < 0.3 ? 1 + Math.floor(random() * 2) : 0
+    const stone = stoneTiers[currentMap(player).stone]
+    player.props[stone.key] += count
+    addWorldLog(player, `向${npc.name}索取报酬，好感 −6。${count ? `获得 ${count} 枚${stone.name}。` : '对方拒绝了，这次没有获得物品。'}`, 'npc')
+    return true
+  }
+  recordJourneyEvent(player, event, choice)
+  if (event.kind === 'courier' && choice === 'deliver') {
+    changeAffinity(player, npc.id, 3)
+    const money = random() < 0.3 ? 20 + event.level * 3 : 0
+    player.props.money += money
+    addWorldLog(player, `替${npc.name}送达家书，好感 +3。${money ? `获赠 ${money} 灵石。` : '这次没有额外酬谢。'}`, 'npc')
+    return true
+  }
+  const special = wildEventTypes[event.kind]
+  if (special?.fire && choice === special.choice) {
+    player.world.opportunityProgress ||= {}
+    const attempts = (player.world.opportunityProgress[special.fire] || 0) + 1
+    player.world.opportunityProgress[special.fire] = attempts
+    if ((random() < 0.2 || attempts >= 5) && grantFlame(player, special.fire, 'opportunity')) return true
+    addWorldLog(player, `${special.name}完成，${player.world.flames.some(fire => fire.id === special.fire) ? '这道异火已经收集过了。' : `这次未获异火，机缘进度 ${attempts} / 5。`}`, 'npc')
+    return true
+  }
   if (choice === 'trade') {
     player.props.money -= cost
     player.props[stoneTiers[currentMap(player).stone].key] += 4
@@ -120,7 +160,7 @@ export const resolveOpportunity = (player, choice) => {
     player.props.money -= cost
     changeAffinity(player, npc.id, 5)
   } else if (choice === 'learn') {
-    gainCultivation(player, player.maxCultivation * 0.15)
+    gainCultivation(player, Math.min(player.maxCultivation * 0.15, cultivationPerTick(player.level) * 15) * cultivationEfficiency(player))
     player.health = Math.min(player.maxHealth, player.health + Math.round(player.maxHealth * 0.2))
     changeAffinity(player, npc.id, 3)
   } else if (choice === 'clue') {
@@ -169,7 +209,7 @@ export const harvestHerb = (player, index, now = Date.now(), random = Math.rando
   garden.plots[index] = null
   addHerbs(player, seed.id, seed.yield)
   garden.harvests++
-  garden.pendingCultivation += Math.floor(player.maxCultivation * 0.025)
+  garden.pendingCultivation += Math.floor(Math.min(player.maxCultivation * 0.025, cultivationPerTick(player.level) * 3 * (herbSeeds.indexOf(seed) + 1)))
   settleGardenCultivation(player)
   if (!garden.visitor && random() < 0.12) {
     garden.visitor = { arrivedAt: now }

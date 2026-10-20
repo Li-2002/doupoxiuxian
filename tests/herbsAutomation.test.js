@@ -150,7 +150,7 @@ test('旧药草计数迁入凝血草一次，赠礼、老人、出售按分类�
   assert.equal(herbSeeds.length, 3)
 })
 
-test('只接受独立打怪/修炼，旧同修存档停止挂机，切换修炼退出野外交战', () => {
+test('只接受独立打怪/修炼，旧同修存档停止挂机，未结束交战不能切换修炼', () => {
   const p = makePlayer()
   p.world.mode = 'both'
   initializeWorld(p)
@@ -160,7 +160,11 @@ test('只接受独立打怪/修炼，旧同修存档停止挂机，切换修炼�
   setAutomation(p, 'hunt', 1000)
   assert.match(automationStatus(p), /正在自动打怪/)
   p.world.encounter = { health: 100 }
-  setAutomation(p, 'cultivate', 1000)
+  assert.ok(setAutomation(p, 'cultivate', 1000))
+  assert.equal(p.world.mode, 'hunt')
+  p.world.encounter = null
+  setAutomation(p, 'idle', 1000)
+  assert.equal(setAutomation(p, 'cultivate', 1000), undefined)
   assert.equal(p.world.encounter, null)
   assert.match(automationStatus(p), /正在自动修炼/)
   advanceWorld(p, 21000)

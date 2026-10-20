@@ -1,10 +1,11 @@
 import equip from './equip.js'
-import { maxLv, levelNames, cultivationCost } from './realms.js'
+import { maxLv, levelNames, cultivationCost, cultivationPerTick } from './realms.js'
 import { createWorldState, worldMaps, worldNpcs, heavenlyFlames, stoneTiers } from './douqiWorld.js'
 import { migrateBalance, flameDamageProfile, calculateStrike, enemyAttributes, applyEquipmentBalance, combatScore, syncExclusiveEquipment } from './balance.js'
 import { hasActiveTrial, trialStep, meetNpc, changeAffinity, createWildEvent, resolveOpportunity, settleGardenCultivation } from './worldActivities.js'
 import { initializeHerbs, autoHealWithHerbs } from './herbs.js'
-import { addWorldLog, gainCultivation, currentMap, grantFlame } from './worldProgress.js'
+import { addWorldLog, gainCultivation, currentMap, grantFlame, initializeCapacity } from './worldProgress.js'
+import { initializeJourney, isRegionUnlocked, cultivationEfficiency, completeRegionUnlock } from './journey.js'
 export { addWorldLog, gainCultivation, currentMap } from './worldProgress.js'
 export { resolveOpportunity } from './worldActivities.js'
 
@@ -24,6 +25,15 @@ export const initializeWorld = player => {
     addWorldLog(player, '已踏入斗气大陆，原有装备、法宝、灵宠与道侣均已保留。', 'realm')
   }
   const world = player.world
+  initializeCapacity(player)
+  initializeJourney(player)
+  if (world.progressionVersion !== 1) {
+    const ratio = Math.min(1, player.cultivation / (player.maxCultivation || 100))
+    player.maxCultivation = cultivationCost(player.level, player.reincarnation)
+    player.cultivation = Math.floor(player.maxCultivation * ratio)
+    world.progressionVersion = 1
+  }
+  if (world.autoNpcVersion !== 1) { world.autoNpc = false; world.autoNpcVersion = 1 }
   world.exclusiveRedeemed ??= false
   if (world.version < 2) {
     const defaults = createWorldState()
@@ -38,6 +48,14 @@ export const initializeWorld = player => {
     world.version = 2
     addWorldLog(player, '异火获取与属性体系已更新，旧物品和收集进度保留；战斗数值已统一重算。', 'system')
   }
+  const retiredFlame = world.flames.find(fire => fire.id === 'starlight')
+  if (retiredFlame) {
+    world.flames = world.flames.filter(fire => fire.id !== 'starlight')
+    if (retiredFlame.refined) player.props.money += 2800
+    addWorldLog(player, `星灯离尘火已移出图鉴。${retiredFlame.refined ? '已返还 2800 炼化灵石。' : ''}通关心炎深渊获得陨落心炎，炼化后可加快修炼。`, 'system')
+  }
+  if (world.activeFlame === 'starlight') world.activeFlame = ''
+  if (world.opportunityProgress) delete world.opportunityProgress.starlight
   for (const stone of stoneTiers) player.props[stone.key] ??= 0
   initializeHerbs(player)
   world.herbCooldown ??= 0
@@ -68,13 +86,15 @@ export const flameBonuses = player => {
 }
 
 export const cultivateTick = player => {
+  if (player.world.mode === 'hunt' || player.world.encounter || player.world.opportunity || hasActiveTrial(player)) return
   const mentors = Object.values(player.world.relationships).filter(value => value >= 600).length
-  gainCultivation(player, (3 + player.level * 3 + player.level * player.level * 0.08) * (1 + flameBonuses(player).cultivation + Math.min(0.2, mentors * 0.025)))
+  gainCultivation(player, cultivationPerTick(player.level) * (1 + flameBonuses(player).cultivation + Math.min(0.2, mentors * 0.025)) * cultivationEfficiency(player))
   if (!player.world.encounter) player.health = Math.min(player.maxHealth, player.health + Math.max(2, Math.floor(player.maxHealth * 0.01)))
 }
 
 export const setAutomation = (player, mode, now = Date.now()) => {
   if (!['idle', 'hunt', 'cultivate'].includes(mode)) return
+  if (mode === 'cultivate' && (player.world.encounter || player.world.opportunity)) return '请先完成战斗或处理野外奇遇，再开启修炼'
   if (mode !== 'idle' && hasActiveTrial(player)) {
     const error = '试炼中无法开启挂机修炼或野外打怪，请先结束试炼。'
     addWorldLog(player, error, 'system')
@@ -103,7 +123,7 @@ export const automationStatus = (player, paused = false) => {
 
 export const selectMap = (player, id) => {
   const map = worldMaps.find(item => item.id === id)
-  if (!map || player.level < map.min || hasActiveTrial(player)) return false
+  if (!map || player.level < map.min || !isRegionUnlocked(player, id) || hasActiveTrial(player) || player.world.encounter || player.world.opportunity) return false
   player.world.mapId = id
   player.world.encounter = null
   player.world.opportunity = null
@@ -142,6 +162,12 @@ export const rewardMonster = (player, random = Math.random) => {
   const world = player.world
   const map = currentMap(player)
   const monster = world.encounter
+  if (monster.kind === 'pass') {
+    completeRegionUnlock(player, monster.unlock)
+    world.encounter = null
+    world.mode = 'idle'
+    return
+  }
   const money = 18 + monster.level * 4
   const stoneCount = 1 + Math.floor(random() * 3)
   const tier = random() < 0.2 ? Math.max(0, map.stone - 1) : map.stone
@@ -153,7 +179,7 @@ export const rewardMonster = (player, random = Math.random) => {
   player.props[stoneTiers[tier].key] += stoneCount
   world.sessions.stones += stoneCount
   player.props.cultivateDan += 1 + player.reincarnation
-  const exp = gainCultivation(player, player.maxCultivation * 0.10 * Math.min(1, (monster.level + 1) / (player.level + 1)))
+  const exp = gainCultivation(player, Math.min(player.maxCultivation * 0.10, cultivationPerTick(player.level) * 6) * Math.min(1, (monster.level + 1) / (player.level + 1)))
   addWorldLog(player, '击败' + monster.name + '，获得 ' + exp + ' 修为、' + money + ' 灵石、' + stoneCount + ' 枚' + stoneTiers[tier].name + '。', 'loot')
   if (monster.event) {
     changeAffinity(player, monster.event.npc, monster.event.favor)
@@ -189,12 +215,12 @@ export const strikeText = result => {
 
 export const explorationStep = (player, random = Math.random) => {
   const world = player.world
-  if (hasActiveTrial(player)) return
+  if (hasActiveTrial(player) || world.mode === 'cultivate') return
   autoHealWithHerbs(player)
   let map = currentMap(player)
   if (player.level < map.min) { selectMap(player, 'wutan'); map = currentMap(player) }
   if (world.opportunity) {
-    if (world.mode !== 'idle' && world.autoNpc) resolveOpportunity(player, !world.opportunity.kind || world.opportunity.kind === 'meeting' ? 'learn' : 'help')
+    if (world.mode !== 'idle' && world.autoNpc) resolveOpportunity(player, world.opportunity.kind === 'meeting' ? 'learn' : ['insight', 'courier'].includes(world.opportunity.kind) ? 'leave' : 'help')
     return
   }
   if (world.resting || (!world.encounter && player.health <= player.maxHealth * 0.25)) {
@@ -212,7 +238,7 @@ export const explorationStep = (player, random = Math.random) => {
     }
     if (random() < 0.20) {
       createWildEvent(player, random)
-      if (world.mode !== 'idle' && world.autoNpc) resolveOpportunity(player, world.opportunity.kind === 'meeting' ? 'learn' : 'help')
+      if (world.mode !== 'idle' && world.autoNpc) resolveOpportunity(player, world.opportunity.kind === 'meeting' ? 'learn' : ['insight', 'courier'].includes(world.opportunity.kind) ? 'leave' : 'help')
       return
     }
     const level = Math.min(map.max, Math.max(map.min, player.level))

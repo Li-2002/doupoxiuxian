@@ -4,7 +4,7 @@ import { makePlayer, makeItem, wearSet, seededRandom } from './fixtures.js'
 import { heavenlyFlames, worldMaps } from '../src/plugins/douqiWorld.js'
 import { trials } from '../src/plugins/worldContent.js'
 import { calculateStrike, flameDamageProfile, baseAttributes, applyCompanionBalance } from '../src/plugins/balance.js'
-import { initializeWorld, seekFlame, explorationStep, rewardMonster, setAutomation, advanceWorld } from '../src/plugins/douqi.js'
+import { initializeWorld, seekFlame, explorationStep, rewardMonster, setAutomation, advanceWorld, refineFlame, flameBonuses, cultivateTick } from '../src/plugins/douqi.js'
 import { grantFlame } from '../src/plugins/worldProgress.js'
 import { startTrial, trialStep, nextTrialStage, leaveTrial, hasActiveTrial, restAtCamp, claimSeedlings, plantHerb,
   harvestHerb, helpGardenVisitor, useHerbs, meetNpc, changeAffinity, giveNpcGift, formBond, knownNpcRows,
@@ -19,7 +19,32 @@ const finishTrial = (player, seed = 1) => {
   return player.world.trial.status === 'cleared'
 }
 
-test('所有专属异火不会从普通野外掉落，图鉴 23 道均有有效获取路径', () => {
+test('陨落心炎由心炎深渊首通获得，炼化后加快每次修炼且不重复叠加', () => {
+  const p = wearSet(makePlayer(49), 'danger', 15)
+  p.world.mapId = 'yunlan'
+  p.props.money = 100000
+  initializeWorld(p)
+  p.world.skills.wave = 3
+  p.world.skillId = 'wave'
+  assert.equal(startTrial(p, 'fallen-trial'), '')
+  assert.equal(finishTrial(p), true)
+  assert.equal(p.world.flames.filter(fire => fire.id === 'fallen').length, 1)
+  assert.equal(flameBonuses(p).cultivation, 0)
+  const before = p.cultivation
+  cultivateTick(p)
+  const ordinary = p.cultivation - before
+  assert.equal(refineFlame(p, 'fallen'), '')
+  const bonus = flameBonuses(p).cultivation
+  assert.ok(bonus > 0.14 && bonus < 0.15)
+  const after = p.cultivation
+  cultivateTick(p)
+  assert.ok(p.cultivation - after > ordinary)
+  assert.ok(refineFlame(p, 'fallen'))
+  initializeWorld(p)
+  assert.equal(flameBonuses(p).cultivation, bonus)
+})
+
+test('所有专属异火不会从普通野外掉落，图鉴 24 道均有有效获取路径', () => {
   const p = makePlayer(102)
   for (const map of worldMaps) {
     for (let i = 0; i < 30; i++) seekFlame(p, map, () => 0)
@@ -201,7 +226,7 @@ test('五种野外事件均可生成，赠礼有冷却且认识的旧 NPC 全部
   assert.ok(rows.some(row => row.name === '旧相识' && row.affinity === 450))
 })
 
-test('每道炼化异火独立附伤，23 火总增幅有界且不会二次暴击或递归叠乘', () => {
+test('每道炼化异火独立附伤，24 火总增幅有界且不会二次暴击或递归叠乘', () => {
   const p = makePlayer(102)
   p.attack = 10000
   p.world.skillId = 'palm'

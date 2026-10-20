@@ -50,13 +50,14 @@ export const heavenlyFlames = [
   ['volcano', '火山石焰', 17, 30, '#c27e61'], ['winddragon', '风怒龙炎', 18, 22, '#cba967'],
   ['lotus', '青莲地心火', 19, 18, '#62b39c'], ['dragonphoenix', '龙凤焱', 20, 13, '#bd9c66'],
   ['reincarnation', '六道轮回炎', 21, 81, '#9d91bc'], ['beasts', '万兽灵火', 22, 9, '#c79b6c'],
-  ['xuanhuang', '玄黄炎', 23, 0, '#d6af6c']
+  ['xuanhuang', '玄黄炎', 23, 0, '#d6af6c'],
+  ['serenity', '清心琉璃焰', 24, 9, '#75b6b1']
 ].map(([id, name, rank, min, color]) => {
   const source = flameAcquisition[id] || { type: 'wild', text: `在${worldMaps.find(map => map.fires.includes(id)).name}击败魔兽随机寻获；NPC 线索提高概率。` }
   min = source.min ?? min
   return { id, name, rank, min, color, source,
     attack: 0.012 + (24 - rank) * 0.0015,
-    cultivation: id === 'fallen' ? 0.18 : 0.025 + (24 - rank) * 0.002,
+    cultivation: ['serenity', 'fallen'].includes(id) ? 0.18 : 0.025 + (24 - rank) * 0.002,
     cost: 100 * (min + 1)
   }
 })
@@ -64,7 +65,7 @@ export const heavenlyFlames = [
 for (const map of worldMaps) map.fires = map.fires.filter(id => !flameAcquisition[id])
 
 export const createWorldState = () => ({
-  version: 2, balanceVersion: 2, mapId: 'wutan', mode: 'idle', autoNpc: true, autoSalvage: true, herbCooldown: 0,
+  version: 2, balanceVersion: 2, progressionVersion: 1, mapId: 'wutan', mode: 'idle', autoNpc: false, autoNpcVersion: 1, autoSalvage: true, herbCooldown: 0,
   lastTick: Date.now(), encounter: null, opportunity: null, resting: false,
   flames: [], activeFlame: '', clues: {}, pity: {}, relationships: {},
   kills: 0, sessions: { kills: 0, money: 0, stones: 0, equipment: 0, cultivation: 0 }, logs: [],

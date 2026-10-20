@@ -49,7 +49,7 @@ export const applyEquipmentBalance = item => {
   return item
 }
 
-export const exclusiveFlameBonus = count => Math.floor(clamp(count, 0, heavenlyFlames.length)) * EXCLUSIVE_FLAME_STEP
+export const exclusiveFlameBonus = count => Math.floor(clamp(count, 0, 23)) * EXCLUSIVE_FLAME_STEP
 
 export const syncExclusiveEquipment = player => {
   const count = heavenlyFlames.filter(fire => player.world.flames.some(owned => owned.id === fire.id)).length

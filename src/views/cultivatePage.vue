@@ -7,11 +7,13 @@
       <p>{{ player.level >= maxLv ? '已至斗帝之境' : '下一境界：' + levelNames(player.level + 1) }}</p>
       <el-progress :percentage="percentage" :format="value => value.toFixed(1) + '%'" :stroke-width="12" color="#9e8b55" />
       <p class="muted">修为 {{ Math.floor(player.cultivation).toLocaleString() }} / {{ player.maxCultivation.toLocaleString() }}</p>
-      <p class="muted">每 2 秒吐纳一次，修为满时自动突破，获得属性与 3 点境界点。异火与 NPC 交情可提高修炼收益。</p>
+      <p class="muted">每 2 秒吐纳一次，自动突破获得属性、3 点境界点与 50 格行囊。境界越高，突破越慢。</p>
+      <p>当前地点：{{ currentMap(player).name }} · 效率 {{ Math.round(cultivationEfficiency(player) * 100) }}%</p>
       <p v-if="flame.count" class="flame-cultivation">{{ flame.count }} 道异火护体 · 修炼收益 +{{ Math.round(flame.cultivation * 100) }}%</p>
       <div class="meditation-actions"><el-button type="primary" size="large" :disabled="player.level >= maxLv || world.mode === 'cultivate'" @click="operationFeedback(setAutomation(player, 'cultivate'))">挂机修炼</el-button><el-button size="large" :disabled="world.mode === 'idle'" @click="setAutomation(player, 'idle')">停止挂机</el-button><el-button size="large" @click="reincarnate">转生突破</el-button></div>
       <p class="automation-state" :class="{ active: world.mode !== 'idle' }">{{ automationStatus(player) }}</p>
     </section>
+    <CultivationLocations />
     <div class="realm-road"><span v-for="stage in stages" :key="stage.name" :class="{ reached: player.level >= stage.level }"><b>{{ stage.name }}</b><small>{{ player.level >= stage.level ? '已踏入' : levelNames(stage.level) }}</small></span></div>
     <section class="journal"><div class="section-title"><h3>修行札记</h3><router-link class="quiet-link" to="/map">前往大陆历练</router-link></div><div class="journal-entries" role="log"><p v-if="!logs.length" class="muted">开启挂机修炼，静候斗气突破。</p><div v-for="(entry, i) in logs" :key="i" class="journal-entry" :class="entry.type"><time>{{ new Date(entry.time).toLocaleTimeString('zh-CN', { hour12: false }) }}</time><span>{{ entry.text }}</span></div></div></section>
   </main>
@@ -23,7 +25,9 @@
   import { useMainStore } from '@/plugins/store'
   import { levelNames, maxLv } from '@/plugins/game'
   import { cultivationCost } from '@/plugins/realms'
-  import { setAutomation, selectMap, addWorldLog, flameBonuses, automationStatus } from '@/plugins/douqi'
+  import { setAutomation, selectMap, addWorldLog, flameBonuses, automationStatus, currentMap } from '@/plugins/douqi'
+  import { cultivationEfficiency } from '@/plugins/journey'
+  import CultivationLocations from '@/components/CultivationLocations.vue'
   import { flameDamageProfile } from '@/plugins/balance'
   import { hasActiveTrial } from '@/plugins/worldActivities'
   const player = useMainStore().player

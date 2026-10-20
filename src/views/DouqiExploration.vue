@@ -4,10 +4,10 @@
     <div class="expedition-layout">
       <aside class="region-list" aria-label="历练地图">
         <div class="region-heading">大陆舆图 <span>{{ unlocked }} / {{ worldMaps.length }}</span></div>
-        <button v-for="region in worldMaps" :key="region.id" class="region-option" :class="{ selected: map.id === region.id }" :disabled="player.level < region.min" @click="selectMap(player, region.id)">
+        <button v-for="region in worldMaps" :key="region.id" class="region-option" :class="{ selected: map.id === region.id }" :disabled="player.level < region.min" @click="visitRegion(region)">
           <span class="region-symbol" :style="{ color: region.color }">{{ region.symbol }}</span>
-          <span><strong>{{ region.name }}</strong><small>{{ levelNames(region.min) }}起</small></span>
-          <span class="region-lock">{{ player.level < region.min ? '未开放' : map.id === region.id ? '当前' : '前往' }}</span>
+          <span><strong>{{ region.name }}</strong><small>{{ levelNames(region.min) }}起</small><small v-if="!isRegionUnlocked(player, region.id)">{{ regionUnlockHint(player, region.id) }}</small></span>
+          <span class="region-lock">{{ player.level < region.min ? '未开放' : map.id === region.id ? '当前' : isRegionUnlocked(player, region.id) ? '前往' : '解锁' }}</span>
         </button>
       </aside>
       <div class="expedition-main">
@@ -27,7 +27,8 @@
           <div class="vital-bars"><div><span>你的气血 <b>{{ number(player.health) }} / {{ number(player.maxHealth) }}</b></span><el-progress :percentage="healthPercent" :show-text="false" color="#669b80" /></div><div v-if="world.encounter"><span>{{ world.encounter.name }} <b>{{ number(world.encounter.health) }} / {{ number(world.encounter.maxHealth) }}</b></span><el-progress :percentage="world.encounter.health / world.encounter.maxHealth * 100" :show-text="false" color="#c48164" /></div><div v-else><span>修为进度 <b>{{ cultivationPercent.toFixed(1) }}%</b></span><el-progress :percentage="cultivationPercent" :show-text="false" color="#b28e4c" /></div></div>
           <CombatBreakdown :attack="world.lastAttack" /><div class="automation-controls"><el-radio-group :model-value="world.mode" @update:model-value="mode => operationFeedback(setAutomation(player, mode))"><el-radio-button value="idle">手动</el-radio-button><el-radio-button value="hunt">自动打怪</el-radio-button><el-radio-button value="cultivate">自动修炼</el-radio-button></el-radio-group><el-button type="primary" :disabled="hasActiveTrial(player) || world.mode !== 'idle'" @click="manualExplore">{{ world.resting ? '营地疗伤' : '历练一场' }}</el-button></div>
           <p class="automation-state" :class="{ active: world.mode !== 'idle' }">{{ automationStatus(player) }}</p>
-          <div class="automation-options"><el-checkbox v-model="world.autoNpc">挂机时自动处理野外事件</el-checkbox><el-checkbox v-model="world.autoSalvage">背包满时分解新掉落</el-checkbox></div>
+          <div class="automation-options"><el-checkbox :model-value="world.autoNpc" @update:model-value="toggleAutoNpc">挂机时自动处理野外事件</el-checkbox><el-checkbox v-model="world.autoSalvage">背包满时分解新掉落</el-checkbox></div>
+          <p v-if="world.autoNpc" class="muted travel-note">自动处理可能错过部分奇遇，建议关闭后自行抉择。</p>
           <p class="muted travel-note">药草 {{ world.garden.herbs }} 份 · 自动打怪时，气血不高于 50% 自动服药，间隔 6 秒。</p>
         </section>
         <section class="opportunity-panel" v-if="opportunityNpc">
@@ -42,23 +43,39 @@
 
 <script setup>
   import { computed } from 'vue'
+  import { ElMessageBox } from 'element-plus'
   import { useMainStore } from '@/plugins/store'
   import { worldMaps, stoneTiers, worldNpcs } from '@/plugins/douqiWorld'
   import { currentMap, selectMap, setAutomation, explorationStep, resolveOpportunity, automationStatus } from '@/plugins/douqi'
   import { opportunityChoices, hasActiveTrial } from '@/plugins/worldActivities'
   import { wildEventTypes } from '@/plugins/worldContent'
   import CombatBreakdown from '@/components/CombatBreakdown.vue'
-  import { operationFeedback } from '@/plugins/feedback'
+  import { operationFeedback, notifyFailure } from '@/plugins/feedback'
+  import { isRegionUnlocked, regionUnlockHint, unlockRegion } from '@/plugins/journey'
   import { levelNames, maxLv } from '@/plugins/game'
   const player = useMainStore().player
   const world = player.world
   const map = computed(() => currentMap(player))
-  const unlocked = computed(() => worldMaps.filter(region => player.level >= region.min).length)
+  const unlocked = computed(() => worldMaps.filter(region => isRegionUnlocked(player, region.id)).length)
   const healthPercent = computed(() => Math.max(0, Math.min(100, player.health / player.maxHealth * 100)))
   const cultivationPercent = computed(() => player.level >= maxLv ? 100 : Math.min(100, player.cultivation / player.maxCultivation * 100))
   const opportunityNpc = computed(() => worldNpcs.find(npc => npc.id === world.opportunity?.npc))
   const tradeCost = computed(() => 30 * ((world.opportunity?.level ?? map.value.min) + 1))
   const number = value => Math.floor(value).toLocaleString('zh-CN')
+  const visitRegion = region => {
+    if (isRegionUnlocked(player, region.id)) {
+      if (!selectMap(player, region.id)) notifyFailure('请先结束战斗或处理当前奇遇再移动')
+    } else operationFeedback(unlockRegion(player, region.id))
+  }
+  const toggleAutoNpc = async enabled => {
+    if (!enabled) { world.autoNpc = false; return }
+    try {
+      await ElMessageBox.confirm('自动处理野外事件可能错过部分奇遇与异火，建议保持不选中，遇事自行抉择。仍要开启吗？', '野外事件自动处理', { confirmButtonText: '仍然开启', cancelButtonText: '自行抉择', type: 'warning' })
+      world.autoNpc = true
+    } catch (error) {
+      if (error !== 'cancel' && error !== 'close') throw error
+    }
+  }
   const manualExplore = () => {
     explorationStep(player)
     for (let i = 0; i < 41 && world.encounter; i++) explorationStep(player)

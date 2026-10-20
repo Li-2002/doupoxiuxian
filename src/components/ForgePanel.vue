@@ -2,7 +2,7 @@
   <div class="forge-panel" v-if="item?.name">
     <div class="forge-item-name"><tag :type="item.quality">{{ item.name }} +{{ item.strengthen || 0 }}</tag></div>
     <p>{{ genre[item.type] }} · {{ levelNames(item.level) }}</p>
-    <p v-if="isExclusiveEquipment(item)" class="muted">异火共鸣 {{ item.flameCount || 0 }} / 23 · 成长 +{{ (exclusiveFlameBonus(item.flameCount) * 100).toFixed(1) }}%</p>
+    <p v-if="isExclusiveEquipment(item)" class="muted">异火共鸣 {{ item.flameCount || 0 }} 道 · 成长 +{{ (exclusiveFlameBonus(item.flameCount) * 100).toFixed(1) }}%（上限 11.5%）</p>
     <div class="forge-stats">
       <span>攻击 <b>{{ item.attack }}</b></span><span>防御 <b>{{ item.defense }}</b></span>
       <span>气血 <b>{{ item.health }}</b></span><span>评分 <b>{{ item.score }}</b></span>

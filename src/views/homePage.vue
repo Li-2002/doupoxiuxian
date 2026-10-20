@@ -14,7 +14,7 @@
               <EditPen />
             </el-icon>
           </div>
-          <div class="tag attribute">年纪: {{ player.age }}岁</div>
+          <div class="tag attribute" title="累计在线60分钟增加1岁，未满一小时的进度会保存">年纪: {{ player.age }}岁</div>
           <div class="tag attribute" @click="isLevel = true">
             境界: {{ levelNames(player.level) }} ({{ player.reincarnation || 0 }}转)
             <el-icon>
@@ -74,7 +74,7 @@
               <Warning />
             </el-icon>
           </div>
-          <div class="tag attribute" @click="gameNotifys({ title: '获得方式', message: '每转生一次可以增加50容量' })">
+          <div class="tag attribute" @click="gameNotifys({ title: '获得方式', message: '每提升一级额外增加50格，转生仍增加50格容量' })">
             背包容量: {{ player?.inventory?.length }} / {{ player.backpackCapacity }}
             <el-icon>
               <Warning />
@@ -297,6 +297,7 @@
                     <tag type="success" class="dialog-footer-button" v-if="!player.isNewbie" @click="newbiePack">
                       领取新手礼包
                     </tag>
+                    <SalvageEquipment />
                   </div>
                 </el-tab-pane>
               </el-tabs>
@@ -1094,6 +1095,7 @@
   import { ref, computed, watch, onMounted } from 'vue'
   // 标签组件
   import tag from '@/components/tag.vue'
+  import SalvageEquipment from '@/components/SalvageEquipment.vue'
   // 商店
   import shop from '@/plugins/shop'
   // 装备

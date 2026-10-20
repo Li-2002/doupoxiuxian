@@ -12,5 +12,6 @@ export const realmNames = [
 
 export const maxLv = realmNames.length - 1
 export const levelNames = level => realmNames[Math.max(0, Math.min(maxLv, Math.floor(Number(level) || 0)))]
+export const cultivationPerTick = level => 3 + level * 3 + level * level * 0.08
 export const cultivationCost = (level, reincarnation = 0) =>
-  Math.floor((100 + level * 80 + level * level * 12) * (1 + reincarnation * 0.5))
+  Math.floor(cultivationPerTick(level) * (100 / 3 + level * 4 + level * level * 0.08) * (1 + reincarnation * 0.5))

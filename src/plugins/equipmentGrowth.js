@@ -12,6 +12,30 @@ const combatGuard = player => hasActiveTrial(player) || player.world.encounter ?
 const owns = (player, item) => !!item?.name && (player.inventory.includes(item) || player.equipment[item.type] === item)
 const hasSpace = (player, count) => player.inventory.length + count <= player.backpackCapacity
 
+export const salvageQualities = [
+  { quality: 'info', name: '白色' }, { quality: 'success', name: '绿色' }, { quality: 'primary', name: '蓝色' },
+  { quality: 'purple', name: '紫色' }, { quality: 'warning', name: '橙色' }, { quality: 'danger', name: '红色' }, { quality: 'pink', name: '粉色' }
+]
+export const salvagePreview = (player, quality) => {
+  const cutoff = salvageQualities.findIndex(entry => entry.quality === quality)
+  const items = player.inventory.filter(item => {
+    const rank = salvageQualities.findIndex(entry => entry.quality === item.quality)
+    return rank >= 0 && rank < cutoff && !item.lock && !isExclusiveEquipment(item) &&
+      !Object.values(player.equipment).some(worn => worn === item || (worn?.id && worn.id === item.id))
+  })
+  return { items, money: items.length, stones: items.reduce((sum, item) => sum + Math.floor(item.level * (1 + player.reincarnation / 10)), 0) }
+}
+export const salvageBelow = (player, quality) => {
+  if (combatGuard(player)) return combatGuard(player)
+  const preview = salvagePreview(player, quality)
+  if (!preview.items.length) return '没有可分解的装备，所选品质本身、锁定与专属装备均会保留'
+  player.inventory = player.inventory.filter(item => !preview.items.includes(item))
+  player.props.money += preview.money
+  player.props.strengtheningStone += preview.stones
+  addWorldLog(player, `一键分解 ${preview.items.length} 件装备，获得 ${preview.stones} 炼器石、${preview.money} 灵石。`, 'equipment')
+  return ''
+}
+
 export const createStarterPack = (mode = 'normal', random = Math.random) => {
   const types = Object.keys(generators)
   const red = []

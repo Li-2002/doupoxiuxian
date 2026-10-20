@@ -18,8 +18,8 @@ test('斗气境界的关键边界与地图、异火完整性', () => {
     [80, '九星斗尊'], [81, '一转斗尊巅峰'], [89, '九转斗尊巅峰'], [90, '初级半圣'],
     [92, '高级半圣'], [93, '一星斗圣'], [101, '九星斗圣'], [102, '斗帝']]) assert.equal(levelNames(level), name)
   assert.equal(levelNames(144), '斗帝')
-  assert.equal(new Set(heavenlyFlames.map(f => f.id)).size, 23)
-  assert.equal(new Set([...worldMaps.flatMap(map => map.fires), ...Object.keys(flameAcquisition)]).size, 23)
+  assert.equal(new Set(heavenlyFlames.map(f => f.id)).size, 24)
+  assert.equal(new Set([...worldMaps.flatMap(map => map.fires), ...Object.keys(flameAcquisition)]).size, 24)
   assert.equal(new Set(worldMaps.map(map => map.stone)).size, stoneTiers.length)
 })
 

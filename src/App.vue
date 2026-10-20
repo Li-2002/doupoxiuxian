@@ -41,6 +41,7 @@
   import { useMainStore } from './plugins/store'
   import WorldHeader from './components/WorldHeader.vue'
   import { advanceWorld } from './plugins/douqi'
+  import { advanceAge } from './plugins/worldProgress'
 
   const player = ref({})
   const route = useRoute()
@@ -63,8 +64,7 @@
       advanceWorld(player.value, Date.now(), allowHunt)
     }, 1000)
     ageTimer = setInterval(() => {
-      // 每分钟增加1岁
-      player.value.age += 1
+      advanceAge(player.value, 60000)
       // 每分钟更新一次玩家最后在线时间
       player.value.time = new Date().getTime()
     }, 60000)
