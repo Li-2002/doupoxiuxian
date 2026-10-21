@@ -25,9 +25,9 @@ export const worldMaps = [
 
 export const worldNpcs = [
   { id: 'yao', name: '药尘', title: '戒中药老', text: '斗气的根基，贵在日复一日的凝练。异火虽强，也要量力而行。' },
-  { id: 'doctor', name: '小医仙', title: '采药行者', text: '前面的山谷有魔兽出没。这些药草，或许能助你走得更远。' },
+  { id: 'doctor', name: '小医仙', title: '采药行者', romantic: true, min: 9, text: '前面的山谷有魔兽出没。这些药草，或许能助你走得更远。' },
   { id: 'hai', name: '海波东', title: '漠城隐者', text: '沙海之下的火焰，我曾在残图上见过它的位置。' },
-  { id: 'merchant', name: '雅妃', title: '米特尔商会', text: '行走大陆，实力和眼光一样重要。来看看这批刚到的强化石。' },
+  { id: 'merchant', name: '雅妃', title: '米特尔商会', romantic: true, min: 27, text: '行走大陆，实力和眼光一样重要。来看看这批刚到的强化石。' },
   { id: 'elder', name: '苏千', title: '内院长老', text: '修行要张弛有度。若能守住本心，机缘自会来临。' },
   { id: 'alchemist', name: '玄空子', title: '丹塔前辈', text: '天地异火，各有灵性。先寻火种，再以斗气徐徐炼化。' }
   ,{ id: 'xuner', name: '古薰儿', title: '古族少女', romantic: true, min: 0, text: '相伴之人，不只看一时强弱，更看是否愿意守护彼此。' }
@@ -35,6 +35,10 @@ export const worldNpcs = [
   ,{ id: 'yun', name: '云韵', title: '云岚宗主', romantic: true, min: 45, text: '独行山海，也会有需要援手的时候。' }
   ,{ id: 'nalan', name: '纳兰嫣然', title: '历练剑客', romantic: true, min: 9, text: '今日承你相助，这份情谊我会记下。' }
   ,{ id: 'medusa', name: '美杜莎', title: '蛇人女王', romantic: true, min: 18, text: '沙海中的承诺，比一时的逞强更有分量。' }
+  ,{ id: 'xiaoyu', name: '萧玉', title: '学院剑修', romantic: true, min: 9, text: '修行路上若能相互照应，便少几分风雨。' }
+  ,{ id: 'qinglin', name: '青鳞', title: '碧瞳行者', romantic: true, min: 18, text: '谢谢你愿意停下脚步，听我说完这段旅途。' }
+  ,{ id: 'hanyue', name: '韩月', title: '银发剑客', romantic: true, min: 36, text: '山海虽远，有同行之人便不觉孤单。' }
+  ,{ id: 'hanxue', name: '韩雪', title: '韩家行者', romantic: true, min: 54, text: '这一程承蒙相助，愿来日也能为你分忧。' }
 ]
 
 // 寻获地图和炼化门槛为本游戏的玩法设定。

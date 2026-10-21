@@ -165,6 +165,8 @@
   import GiftDialog from '@/components/GiftDialog.vue'
   import { knownNpcRows } from '@/plugins/worldActivities'
   import { applyCompanionBalance } from '@/plugins/balance'
+  import { partnerLimitError } from '@/plugins/partners'
+  import { operationFeedback } from '@/plugins/feedback'
   // npc
   import npc from '@/plugins/npc'
   // 怪物
@@ -510,6 +512,7 @@
   }
 
   const harvestNpc = item => {
+    if (partnerLimitError(player.value)) return operationFeedback(partnerLimitError(player.value))
     ElMessageBox.confirm('与对方结为道侣有50%的概率失败, 失败后好感度会清空, 请问还想与对方结为道侣吗?', '结为道侣', {
       center: true,
       cancelButtonText: '取消',
@@ -517,6 +520,7 @@
     })
       .then(() => {
         if (isHaveWife(item.name)) return
+        if (partnerLimitError(player.value)) return operationFeedback(partnerLimitError(player.value))
         const rand = isLucky(50)
         if (rand) {
           // 添加道侣

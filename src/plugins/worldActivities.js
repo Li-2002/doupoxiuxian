@@ -6,7 +6,7 @@ import { levelNames, cultivationPerTick } from './realms.js'
 import { addHerbs, spendHerbs, healWithHerb, initializeHerbs } from './herbs.js'
 import { recordJourneyEvent, cultivationEfficiency } from './journey.js'
 import { giftCatalog } from './partnerContent.js'
-import { initializeBonds, addQingyuan, gainBondExperience, rewardGardenBond, rewardTrialGift } from './partners.js'
+import { initializeBonds, addQingyuan, gainBondExperience, rewardGardenBond, rewardTrialGift, partnerLimitError } from './partners.js'
 
 export const hasActiveTrial = player => ['fighting', 'ready'].includes(player.world.trial?.status)
 export const meetNpc = (player, id) => {
@@ -89,6 +89,7 @@ export const formBond = (player, id) => {
   if (known.partner) return '你们已经结为伴侣'
   if (known.affinity < 1000) return '需要 1000 好感'
   if (player.level < (npc.min || 0)) return `需要达到${levelNames(npc.min)}`
+  if (partnerLimitError(player)) return partnerLimitError(player)
   const relation = meetNpc(player, id)
   relation.affinity = known.affinity
   player.world.relationships[id] = relation.affinity

@@ -2,8 +2,10 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { makePlayer } from './fixtures.js'
 import { initializeWorld, rewardMonster, cultivateTick, setAutomation } from '../src/plugins/douqi.js'
-import { meetNpc, giveNpcGift, formBond, harvestHerb, resolveOpportunity, knownNpcRows, changeAffinity } from '../src/plugins/worldActivities.js'
-import { initializeBonds, claimBondStarter, buyGift, partnerRows, setPartnerTeam, upgradePartner, partnerUpgradeCost, interactPartner, partnerContribution, rewardTrialGift } from '../src/plugins/partners.js'
+import { meetNpc, giveNpcGift, formBond, harvestHerb, resolveOpportunity, knownNpcRows, changeAffinity, createWildEvent } from '../src/plugins/worldActivities.js'
+import { initializeBonds, claimBondStarter, buyGift, partnerRows, setPartnerTeam, upgradePartner, partnerUpgradeCost, interactPartner, partnerContribution, partnerCultivationBonus, rewardTrialGift } from '../src/plugins/partners.js'
+import { worldNpcs } from '../src/plugins/douqiWorld.js'
+import { wildEventTypes } from '../src/plugins/worldContent.js'
 import { applyCompanionBalance, baseAttributes } from '../src/plugins/balance.js'
 import { performReincarnation } from '../src/plugins/worldProgress.js'
 
@@ -102,6 +104,64 @@ test('多位伴侣可同时结伴、三位同行按主位和支援计算，反�
   assert.equal(partnerRows(p).length, 4)
   assert.ok(setPartnerTeam(p, ['古薰儿', '云韵', '纳兰嫣然', '美杜莎']))
   assert.ok(setPartnerTeam(p, ['古薰儿', '古薰儿']))
+})
+
+test('十位可结缘故人均能通过野外事件结识，只有选中的三位提供道侣属性与羁绊加成', () => {
+  const p = makePlayer(63)
+  initializeWorld(p)
+  const candidates = worldNpcs.filter(npc => npc.romantic)
+  assert.equal(candidates.length, 10)
+  const kinds = Object.keys(wildEventTypes).filter(id => !wildEventTypes[id].map)
+  const before = p.attack
+  for (const [index, npc] of candidates.entries()) {
+    const rolls = [(kinds.indexOf('rescue') + 0.5) / kinds.length, (index + 0.5) / candidates.length]
+    createWildEvent(p, () => rolls.shift())
+    assert.equal(p.world.opportunity.npc, npc.id)
+    p.world.opportunity = null
+    meetNpc(p, npc.id).affinity = 1000
+    assert.equal(formBond(p, npc.id), '')
+  }
+  assert.equal(partnerRows(p).length, 10)
+  assert.equal(p.attack, before)
+  assert.equal(partnerCultivationBonus(p), 0)
+  assert.equal(setPartnerTeam(p, ['古薰儿', '云韵', '纳兰嫣然']), '')
+  const stats = { attack: p.attack, defense: p.defense, maxHealth: p.maxHealth, bonus: partnerContribution(p) }
+  p.props.qingyuan = 1000
+  for (const partner of p.wifes.filter(item => !p.world.bonds.team.includes(item.name))) {
+    partner.level = 0
+    partner.bondExperience = 80
+    assert.equal(upgradePartner(p, partner.name), '')
+    assert.equal(interactPartner(p, partner.name, 'chat', 100000), '')
+  }
+  assert.equal(partnerCultivationBonus(p), 0)
+  assert.deepEqual({ attack: p.attack, defense: p.defense, maxHealth: p.maxHealth, bonus: partnerContribution(p) }, stats)
+  initializeWorld(p)
+  assert.equal(partnerRows(p).length, 10)
+  assert.deepEqual(p.world.bonds.team, ['古薰儿', '云韵', '纳兰嫣然'])
+  const snapshot = JSON.stringify(p)
+  assert.ok(setPartnerTeam(p, ['古薰儿', '云韵', '纳兰嫣然', '美杜莎']))
+  assert.equal(JSON.stringify(p), snapshot)
+})
+
+test('结缘十位上限计入主位和旧道侣，满员失败不改好感与资源，旧档超额记录完整保留', () => {
+  const p = makePlayer(63)
+  p.wife = applyCompanionBalance({ name: '旧主位', level: 0 })
+  for (let i = 0; i < 8; i++) addPartner(p, `旧道侣${i}`, 0)
+  initializeWorld(p)
+  meetNpc(p, 'xuner').affinity = 1000
+  assert.equal(formBond(p, 'xuner'), '')
+  assert.equal(partnerRows(p).length, 10)
+  meetNpc(p, 'yun').affinity = 1000
+  const snapshot = JSON.stringify(p)
+  assert.match(formBond(p, 'yun'), /最多.*10/)
+  assert.equal(JSON.stringify(p), snapshot)
+  assert.equal(formBond(p, 'xuner'), '你们已经结为伴侣')
+  addPartner(p, '额外旧道侣', 0)
+  initializeWorld(p)
+  assert.equal(partnerRows(p).length, 11)
+  assert.match(formBond(p, 'yun'), /最多.*10/)
+  assert.equal(setPartnerTeam(p, ['旧主位', '旧道侣0', '额外旧道侣']), '')
+  assert.equal(partnerRows(p).length, 11)
 })
 
 test('旧单道侣加成迁移不重复，旧NPC支持赠礼；共同互动有冷却、羁绊上限且可培养支援', () => {

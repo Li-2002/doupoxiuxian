@@ -1,4 +1,4 @@
-import { giftCatalog, MAX_PARTNER_TEAM, PARTNER_INTERACTION_COOLDOWN, trialGiftRewards } from './partnerContent.js'
+import { giftCatalog, MAX_PARTNERS, MAX_PARTNER_TEAM, PARTNER_INTERACTION_COOLDOWN, trialGiftRewards } from './partnerContent.js'
 import { worldNpcs } from './douqiWorld.js'
 import { applyCompanionBalance, baseAttributes, combatScore } from './balance.js'
 import { addWorldLog } from './worldProgress.js'
@@ -15,6 +15,7 @@ const ownedPartners = player => {
   return [...unique.values()]
 }
 const busy = player => player.world.encounter || ['fighting', 'ready'].includes(player.world.trial?.status) ? '请先结束战斗或退出试炼' : ''
+export const partnerLimitError = player => ownedPartners(player).length >= MAX_PARTNERS ? `道侣已满，最多结为 ${MAX_PARTNERS} 位道侣` : ''
 
 export const initializeBonds = player => {
   player.props.qingyuan ??= 0

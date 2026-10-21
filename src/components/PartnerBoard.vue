@@ -1,15 +1,15 @@
 <template>
   <section class="partner-board">
-    <div class="activity-summary"><div><h3>同赴山海</h3><p class="muted">已结为道侣 {{ rows.length }} 位 · 情缘 {{ player.props.qingyuan }}</p></div><router-link class="quiet-link" to="/adventures?tab=affinity">结识故人、赠礼与结伴</router-link></div>
+    <div class="activity-summary"><div><h3>同赴山海</h3><p class="muted">道侣 {{ rows.length }} / {{ MAX_PARTNERS }} 位 · 加成席位 {{ team.length }} / {{ MAX_PARTNER_TEAM }} · 情缘 {{ player.props.qingyuan }}</p></div><router-link class="quiet-link" to="/adventures?tab=affinity">结识故人、赠礼与结伴</router-link></div>
     <div class="partner-team"><div v-for="(label, index) in ['主位', '支援一', '支援二']" :key="label"><small>{{ label }}</small><strong>{{ team[index] || '待邀同行' }}</strong><span>{{ index ? '提供 25% 培养属性' : '提供完整培养属性' }}</span></div></div>
-    <p class="muted">可与多位故人结伴，最多三位同行。全队加成有上限，切换同行不会恢复气血。</p>
+    <p class="muted">最多结为 {{ MAX_PARTNERS }} 位道侣，选 {{ MAX_PARTNER_TEAM }} 位同行提供属性与羁绊修炼加成；其余道侣仍可培养、赠礼、谈心和同游。全队加成有上限。</p>
     <p class="team-bonus">同行合计：攻击 +{{ bonus.attack }} · 防御 +{{ bonus.defense }} · 气血 +{{ bonus.health }}<span v-if="cultivationBonus"> · 羁绊修炼加成 +{{ Math.round(cultivationBonus * 100) }}%</span></p>
     <el-empty v-if="!rows.length" description="尚未结为道侣。先结识故人，将好感培养至 1000 后结伴。" />
     <div class="partner-grid"><article v-for="item in rows" :key="item.name" :class="{ following: item.teamIndex >= 0 }">
       <header><div><h4>{{ item.name }}</h4><small>{{ levelNames(item.level) }}</small></div><span>{{ item.teamIndex === 0 ? '主位' : item.teamIndex > 0 ? '支援' : '洞府修行' }}</span></header>
       <p>攻击 {{ item.attack }} · 防御 {{ item.defense }} · 气血 {{ item.health }}</p>
       <p>羁绊 {{ item.bondLevel }} / 5 重 · 相伴经验 {{ item.bondExperience || 0 }} / 80</p><el-progress :percentage="Math.min(100, (item.bondExperience || 0) / 80 * 100)" :show-text="false" color="#ac9363" />
-      <div class="partner-actions"><el-button v-if="item.teamIndex < 0" size="small" :disabled="team.length >= 3" :aria-label="item.name + '加入同行'" @click="updateTeam([...team, item.name])">加入同行</el-button><el-button v-else size="small" @click="updateTeam(team.filter(name => name !== item.name))">退出同行</el-button><el-button size="small" :disabled="item.teamIndex === 0 || (item.teamIndex < 0 && team.length >= 3)" :aria-label="item.name + '设为主位'" @click="updateTeam([item.name, ...team.filter(name => name !== item.name)])">设为主位</el-button><el-button size="small" type="primary" :disabled="item.level >= player.level || item.level >= maxLv" :aria-label="item.name + '道侣升级'" @click="act(() => upgradePartner(player, item.name), item.name + '培养成功')">{{ item.level >= Math.min(player.level, maxLv) ? '已达当前境界' : '升级 · ' + partnerUpgradeCost(item) + ' 情缘' }}</el-button></div>
+      <div class="partner-actions"><el-button v-if="item.teamIndex < 0" size="small" :disabled="team.length >= MAX_PARTNER_TEAM" :aria-label="item.name + '加入同行'" @click="updateTeam([...team, item.name])">加入同行</el-button><el-button v-else size="small" @click="updateTeam(team.filter(name => name !== item.name))">退出同行</el-button><el-button size="small" :disabled="item.teamIndex === 0 || (item.teamIndex < 0 && team.length >= MAX_PARTNER_TEAM)" :aria-label="item.name + '设为主位'" @click="updateTeam([item.name, ...team.filter(name => name !== item.name)])">设为主位</el-button><el-button size="small" type="primary" :disabled="item.level >= player.level || item.level >= maxLv" :aria-label="item.name + '道侣升级'" @click="act(() => upgradePartner(player, item.name), item.name + '培养成功')">{{ item.level >= Math.min(player.level, maxLv) ? '已达当前境界' : '升级 · ' + partnerUpgradeCost(item) + ' 情缘' }}</el-button></div>
       <div class="partner-actions"><el-button size="small" :disabled="interactionRemaining(item, now) > 0" :aria-label="item.name + '谈心'" @click="act(() => interactPartner(player, item.name, 'chat'), '谈心完成：情缘 +8、羁绊经验 +4')">谈心</el-button><el-button size="small" :disabled="interactionRemaining(item, now) > 0" :aria-label="item.name + '同游'" @click="act(() => interactPartner(player, item.name, 'stroll'), '同游完成：情缘 +12、羁绊经验 +6')">同游 · 2 份药草</el-button><el-button size="small" :aria-label="item.name + '赠礼'" @click="openGift(item)">赠礼</el-button></div>
       <small>{{ interactionRemaining(item, now) ? '下次相伴：' + interactionRemaining(item, now) + ' 秒后' : '每位道侣每 5 分钟可谈心或同游一次。' }}</small>
     </article></div>
@@ -23,6 +23,7 @@
   import { useMainStore } from '@/plugins/store'
   import { partnerRows, initializeBonds, partnerContribution, partnerCultivationBonus, partnerUpgradeCost, setPartnerTeam, upgradePartner, interactPartner, interactionRemaining } from '@/plugins/partners'
   import { levelNames, maxLv } from '@/plugins/realms'
+  import { MAX_PARTNERS, MAX_PARTNER_TEAM } from '@/plugins/partnerContent'
   import { knownNpcRows } from '@/plugins/worldActivities'
   import { operationFeedback } from '@/plugins/feedback'
   import GiftShop from './GiftShop.vue'
