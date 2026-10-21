@@ -28,6 +28,7 @@ test('陨落心炎由心炎深渊首通获得，炼化后加快每次修炼且�
   p.world.skillId = 'wave'
   assert.equal(startTrial(p, 'fallen-trial'), '')
   assert.equal(finishTrial(p), true)
+  assert.equal(p.world.bonds.gifts['yun-token'], 1)
   assert.equal(p.world.flames.filter(fire => fire.id === 'fallen').length, 1)
   assert.equal(flameBonuses(p).cultivation, 0)
   const before = p.cultivation

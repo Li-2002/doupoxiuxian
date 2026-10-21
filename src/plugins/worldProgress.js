@@ -21,6 +21,31 @@ export const advanceAge = (player, elapsed) => {
   player.world.ageElapsed %= 3600000
 }
 
+export const reincarnationError = player => {
+  if (player.world.encounter || player.world.opportunity || ['fighting', 'ready'].includes(player.world.trial?.status)) return '请先结束战斗或处理当前奇遇'
+  if (player.level < maxLv) return '达到斗帝后方可转生'
+  if (player.points > 0) return '请先在洞府分配所有境界点'
+  const kills = Math.max(1, player.reincarnation) * 100
+  return player.taskNum < kills ? `转生需要本轮累计击败 ${kills} 只魔兽` : ''
+}
+
+export const performReincarnation = player => {
+  const error = reincarnationError(player)
+  if (error) return error
+  player.world.mode = 'idle'
+  player.world.mapId = 'wutan'
+  player.world.resting = false
+  player.world.lastTick = Date.now()
+  player.level = 0
+  player.taskNum = 0
+  player.cultivation = 0
+  player.reincarnation++
+  player.maxCultivation = cultivationCost(0, player.reincarnation)
+  player.backpackCapacity += 50
+  addWorldLog(player, '转生成功，行囊增加 50 格。装备、异火、道侣和已得属性保留，重走境界仍可获得成长。', 'realm')
+  return ''
+}
+
 export const gainCultivation = (player, amount) => {
   initializeCapacity(player)
   if (player.level >= maxLv) return 0

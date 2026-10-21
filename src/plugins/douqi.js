@@ -6,6 +6,7 @@ import { hasActiveTrial, trialStep, meetNpc, changeAffinity, createWildEvent, re
 import { initializeHerbs, autoHealWithHerbs } from './herbs.js'
 import { addWorldLog, gainCultivation, currentMap, grantFlame, initializeCapacity } from './worldProgress.js'
 import { initializeJourney, isRegionUnlocked, cultivationEfficiency, completeRegionUnlock } from './journey.js'
+import { initializeBonds, syncPartnerBonus, partnerCultivationBonus, rewardBattleBond, rewardCultivationBond, addQingyuan } from './partners.js'
 export { addWorldLog, gainCultivation, currentMap } from './worldProgress.js'
 export { resolveOpportunity } from './worldActivities.js'
 
@@ -65,14 +66,15 @@ export const initializeWorld = player => {
     addWorldLog(player, '同修模式已取消，挂机已停止。请选择自动打怪或自动修炼。', 'system')
   }
   migrateBalance(player)
+  initializeBonds(player)
+  syncPartnerBonus(player)
   syncExclusiveEquipment(player)
   player.score = combatScore(player)
   for (const npc of worldNpcs) {
     if (player.wife?.name === npc.name || player.wifes?.some(item => item.name === npc.name)) {
       const relation = meetNpc(player, npc.id)
-      relation.partner = true
-      relation.affinity = 1000
-      world.relationships[npc.id] = 1000
+      if (!relation.partner) { relation.partner = true; relation.affinity = 1000 }
+      world.relationships[npc.id] = relation.affinity
       if (npc.id === 'xuner') grantFlame(player, 'goldemperor', 'bond')
     }
   }
@@ -88,7 +90,8 @@ export const flameBonuses = player => {
 export const cultivateTick = player => {
   if (player.world.mode === 'hunt' || player.world.encounter || player.world.opportunity || hasActiveTrial(player)) return
   const mentors = Object.values(player.world.relationships).filter(value => value >= 600).length
-  gainCultivation(player, cultivationPerTick(player.level) * (1 + flameBonuses(player).cultivation + Math.min(0.2, mentors * 0.025)) * cultivationEfficiency(player))
+  const gained = gainCultivation(player, cultivationPerTick(player.level) * (1 + flameBonuses(player).cultivation + Math.min(0.2, mentors * 0.025 + partnerCultivationBonus(player))) * cultivationEfficiency(player))
+  if (gained > 0) rewardCultivationBond(player)
   if (!player.world.encounter) player.health = Math.min(player.maxHealth, player.health + Math.max(2, Math.floor(player.maxHealth * 0.01)))
 }
 
@@ -173,6 +176,7 @@ export const rewardMonster = (player, random = Math.random) => {
   const tier = random() < 0.2 ? Math.max(0, map.stone - 1) : map.stone
   player.taskNum++
   world.kills++
+  rewardBattleBond(player, random)
   world.sessions.kills++
   player.props.money += money
   world.sessions.money += money
@@ -182,6 +186,7 @@ export const rewardMonster = (player, random = Math.random) => {
   const exp = gainCultivation(player, Math.min(player.maxCultivation * 0.10, cultivationPerTick(player.level) * 6) * Math.min(1, (monster.level + 1) / (player.level + 1)))
   addWorldLog(player, '击败' + monster.name + '，获得 ' + exp + ' 修为、' + money + ' 灵石、' + stoneCount + ' 枚' + stoneTiers[tier].name + '。', 'loot')
   if (monster.event) {
+    addQingyuan(player, 6)
     changeAffinity(player, monster.event.npc, monster.event.favor)
     world.eventWins++
     addWorldLog(player, worldNpcs.find(npc => npc.id === monster.event.npc).name + '的危机已解除，好感 +' + monster.event.favor + '。', 'npc')

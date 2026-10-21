@@ -14,11 +14,12 @@
   import HerbGarden from '@/components/HerbGarden.vue'
   import AffinityBoard from '@/components/AffinityBoard.vue'
   import SkillHall from '@/components/SkillHall.vue'
+  import PartnerBoard from '@/components/PartnerBoard.vue'
   const player = useMainStore().player
   const route = useRoute()
   const router = useRouter()
-  const tabs = [{ id: 'trials', label: '焚天火域' }, { id: 'danta', label: '丹塔试炼' }, { id: 'garden', label: '药草种植' }, { id: 'affinity', label: '好感度表' }, { id: 'skills', label: '斗技修习' }]
+  const tabs = [{ id: 'trials', label: '焚天火域' }, { id: 'danta', label: '丹塔试炼' }, { id: 'garden', label: '药草种植' }, { id: 'affinity', label: '好感度表' }, { id: 'partners', label: '道侣同行' }, { id: 'skills', label: '斗技修习' }]
   const activeTab = computed({ get: () => tabs.some(tab => tab.id === route.query.tab) ? route.query.tab : 'trials', set: value => router.replace({ query: { tab: value } }) })
-  const component = computed(() => ({ trials: TrialPanel, danta: TrialPanel, garden: HerbGarden, affinity: AffinityBoard, skills: SkillHall }[activeTab.value]))
+  const component = computed(() => ({ trials: TrialPanel, danta: TrialPanel, garden: HerbGarden, affinity: AffinityBoard, partners: PartnerBoard, skills: SkillHall }[activeTab.value]))
   const panelProps = computed(() => ['trials', 'danta'].includes(activeTab.value) ? { group: activeTab.value === 'danta' ? 'danta' : 'fire' } : {})
 </script>

@@ -42,7 +42,7 @@ export const propItemNames = {
   money: { name: '灵石', desc: '可以通过分解获得装备获得' },
   flying: { name: '传送符', desc: '可以通过赠送礼物给NPC获得' },
   rootBone: { name: '悟性丹', desc: '可以通过击败世界BOSS获得' },
-  qingyuan: { name: '情缘', desc: '可以通过赠送礼物给NPC获得' },
+  qingyuan: { name: '情缘', desc: '历练每胜1场+1，收获药草+2，修炼每分钟+2；友善奇遇、相伴互动和向任何已结识NPC赠礼也可获得，用于培养道侣' },
   currency: { name: '鸿蒙石', desc: '可以通过击败世界BOSS获得' },
   cultivateDan: { name: '培养丹', desc: '可以通过探索获得' },
   strengtheningStone: { name: '炼器石', desc: '分解装备获得，可替代黄阶强化石' },

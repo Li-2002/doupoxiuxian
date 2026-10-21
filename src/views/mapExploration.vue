@@ -145,9 +145,7 @@
           </div>
         </div>
         <div class="click-box">
-          <el-button type="primary" @click="giftShow = !giftShow">
-            {{ giftShow ? '取消赠送' : '赠送礼物' }}
-          </el-button>
+          <el-button type="primary" @click="openLegacyGift">赠送礼物</el-button>
           <el-button
             type="primary"
             :disabled="npcInfo.favorability < 1000 || isHaveWife(npcInfo.name)"
@@ -156,20 +154,17 @@
             {{ isHaveWife(npcInfo.name) ? '已结为道侣' : '结为道侣' }}
           </el-button>
         </div>
-        <div class="gift-box" v-if="giftShow">
-          <div class="gift-item" v-for="(item, index) in giftItems" :key="index" @click="giftInfo(item, index)">
-            <tag :type="item.lv">{{ item.name }}</tag>
-            <span class="gift-name">{{ item.price }}灵石</span>
-          </div>
-        </div>
+        <p><router-link to="/adventures?tab=partners">道侣培养与三人同行</router-link></p>
       </div>
     </el-drawer>
+    <GiftDialog v-model="giftShow" :npc="giftNpc" />
   </div>
 </template>
 
 <script setup>
-  // tag组件
-  import tag from '@/components/tag.vue'
+  import GiftDialog from '@/components/GiftDialog.vue'
+  import { knownNpcRows } from '@/plugins/worldActivities'
+  import { applyCompanionBalance } from '@/plugins/balance'
   // npc
   import npc from '@/plugins/npc'
   // 怪物
@@ -228,6 +223,11 @@
   // 地图的大小
   const gridSize = ref(50)
   const giftShow = ref(false)
+  const giftNpc = ref(null)
+  const openLegacyGift = () => {
+    giftNpc.value = knownNpcRows(player.value).find(item => item.name === npcInfo.value.name)
+    giftShow.value = true
+  }
   // NPC的数量
   const npcCount = ref(10)
   // 是否正在长按
@@ -242,43 +242,6 @@
   const movingContainer = ref(null)
   const outerContainer = ref(null)
   const innerContainer = ref(null)
-  // 礼物列表
-  const giftItems = computed(() => {
-    const arr = []
-    const num = {
-      1: '一',
-      2: '二',
-      3: '三',
-      4: '四',
-      5: '五',
-      6: '六'
-    }
-    const lv = {
-      1: 'info',
-      2: 'success',
-      3: 'primary',
-      4: 'purple',
-      5: 'warning',
-      6: 'danger'
-    }
-    const price = {
-      1: 200,
-      2: 400,
-      3: 800,
-      4: 1500,
-      5: 2000,
-      6: 3000
-    }
-    for (let i = 1; i < 7; i++) {
-      arr.push({
-        lv: lv[i],
-        plus: Math.max(1, Math.round(price[i] / 500)),
-        name: `${num[i]}品驻颜丹`,
-        price: price[i]
-      })
-    }
-    return arr
-  })
 
   const totalCells = computed(() => {
     return gridSize.value * gridSize.value
@@ -553,10 +516,11 @@
       confirmButtonText: '确定'
     })
       .then(() => {
+        if (isHaveWife(item.name)) return
         const rand = isLucky(50)
         if (rand) {
           // 添加道侣
-          player.value.wifes.push({
+          player.value.wifes.push(applyCompanionBalance({
             name: item.name,
             level: 0,
             dodge: 0,
@@ -565,50 +529,12 @@
             defense: 10,
             critical: 0,
             reincarnation: 0
-          })
+          }))
           gameNotifys({ title: '提示', message: '你成功邀请对方与你结为道侣', position: 'top-left' })
         } else {
           npcInfo.value.favorability = 0
           gameNotifys({ title: '提示', message: '对方拒绝了你的邀请, 好感度清空', position: 'top-left' })
         }
-      })
-      .catch(() => {})
-  }
-
-  // 礼物信息
-  const giftInfo = (item, index) => {
-    ElMessageBox.confirm('', '赠送礼物', {
-      center: true,
-      message: `<div class="monsterinfo">
-      <div class="monsterinfo-box">
-        <p>名称: ${item.name}</p>
-        <p>价格: ${item.price}</p>
-        <p>增加好感度: ${item.plus}</p>
-      </div>
-    </div>`,
-      lockScroll: false,
-      cancelButtonText: '取消赠送',
-      confirmButtonText: '立即赠送',
-      dangerouslyUseHTMLString: true
-    })
-      .then(() => {
-        if (item.price > player.value.props.money) {
-          gameNotifys({ title: '赠送提示', message: '灵石不足, 赠送失败', position: 'top-left' })
-          return
-        }
-        // 扣除灵石数量
-        player.value.props.money -= item.price
-        // 增加好感度
-        npcInfo.value.favorability += item.plus
-        // 增加传送符
-        player.value.props.flying += index
-        // 增加情缘点
-        player.value.props.qingyuan += index
-        gameNotifys({
-          title: '赠送提示',
-          message: `赠送成功, ${npcInfo.value.name}对你的好感度增加了, 并赠与了你${index}张传送符和${index}点情缘`,
-          position: 'top-left'
-        })
       })
       .catch(() => {})
   }
@@ -783,7 +709,7 @@
 
   // 判断玩家是否已当前NPC结为道侣
   const isHaveWife = name => {
-    if (name) return player.value.wifes.some(item => item.name === name)
+    if (name) return player.value.wife?.name === name || player.value.wifes.some(item => item.name === name)
   }
 
   // 钓鱼

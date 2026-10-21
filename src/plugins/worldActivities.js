@@ -5,11 +5,14 @@ import { addWorldLog, gainCultivation, currentMap, grantFlame } from './worldPro
 import { levelNames, cultivationPerTick } from './realms.js'
 import { addHerbs, spendHerbs, healWithHerb, initializeHerbs } from './herbs.js'
 import { recordJourneyEvent, cultivationEfficiency } from './journey.js'
+import { giftCatalog } from './partnerContent.js'
+import { initializeBonds, addQingyuan, gainBondExperience, rewardGardenBond, rewardTrialGift } from './partners.js'
 
 export const hasActiveTrial = player => ['fighting', 'ready'].includes(player.world.trial?.status)
 export const meetNpc = (player, id) => {
-  if (!worldNpcs.some(npc => npc.id === id)) return null
-  player.world.social[id] ||= { affinity: player.world.relationships[id] || 0, metAt: Date.now(), partner: false, lastGiftAt: 0 }
+  const legacy = id.startsWith('legacy:') ? [...(player.npcs || []), ...(player.wifes || []), player.wife].filter(item => item?.name === id.slice(7)) : []
+  if (!worldNpcs.some(npc => npc.id === id) && !legacy.length) return null
+  player.world.social[id] ||= { affinity: Math.max(player.world.relationships[id] || 0, ...legacy.map(item => item.favorability || 0)), metAt: Date.now(), partner: false, lastGiftAt: 0 }
   return player.world.social[id]
 }
 export const changeAffinity = (player, id, amount) => {
@@ -17,9 +20,9 @@ export const changeAffinity = (player, id, amount) => {
   if (!relation) return 0
   const current = knownNpcRows(player).find(npc => npc.id === id)?.affinity ?? relation.affinity
   relation.affinity = clamp(current + amount, 0, 1000)
-  if (amount < 0) {
+  if (amount < 0 || id.startsWith('legacy:')) {
     for (const item of [...(player.npcs || []), ...(player.wifes || []), player.wife]) {
-      if (item?.name === worldNpcs.find(npc => npc.id === id).name) item.favorability = relation.affinity
+      if (item?.name === (worldNpcs.find(npc => npc.id === id)?.name || id.slice(7))) item.favorability = relation.affinity
     }
   }
   player.world.relationships[id] = relation.affinity
@@ -28,14 +31,14 @@ export const changeAffinity = (player, id, amount) => {
 export const affinityLabel = affinity => affinity >= 1000 ? '生死相知' : affinity >= 600 ? '知己' : affinity >= 300 ? '信任' : affinity >= 100 ? '熟识' : '初识'
 
 export const knownNpcRows = player => {
-  const rows = worldNpcs.filter(npc => player.world.social[npc.id]).map(npc => ({ ...npc, ...player.world.social[npc.id], legacy: false }))
   const old = [...(player.npcs || []), ...(player.wifes || []), ...(player.wife?.name ? [player.wife] : [])]
+  const rows = worldNpcs.filter(npc => player.world.social[npc.id] || old.some(item => item.name === npc.name)).map(npc => ({ ...npc, affinity: 0, lastGiftAt: 0, ...player.world.social[npc.id], legacy: false }))
   for (const npc of old) {
     if (!npc?.name) continue
     const row = rows.find(item => item.name === npc.name)
     const partner = player.wife?.name === npc.name || (player.wifes || []).some(wife => wife.name === npc.name)
     if (row) { row.affinity = Math.min(1000, Math.max(row.affinity, npc.favorability || 0)); row.partner ||= partner }
-    else rows.push({ id: `legacy:${npc.name}`, name: npc.name, title: '旧日相识', affinity: Math.min(1000, npc.favorability || (partner ? 1000 : 0)), partner, legacy: true })
+    else rows.push({ ...player.world.social[`legacy:${npc.name}`], id: `legacy:${npc.name}`, name: npc.name, title: '旧日相识', affinity: Math.min(1000, npc.favorability ?? (partner ? 1000 : 0)), partner, legacy: true })
   }
   return rows.sort((a, b) => b.affinity - a.affinity)
 }
@@ -44,43 +47,57 @@ export const GIFT_COOLDOWN = 60000
 export const giftAffinity = { money: 4, herbs: 7 }
 export const npcGiftCost = player => 30 * (1 + Math.floor(player.level / 9))
 export const giftCooldownRemaining = (relation, now = Date.now()) =>
-  relation.lastGiftAt ? Math.max(0, Math.ceil((GIFT_COOLDOWN - (now - relation.lastGiftAt)) / 1000)) : 0
+  relation.lastGiftAt ? Math.min(60, Math.max(0, Math.ceil((GIFT_COOLDOWN - (now - relation.lastGiftAt)) / 1000))) : 0
 
 export const giveNpcGift = (player, id, kind = 'money', now = Date.now()) => {
-  const relation = player.world.social[id]
-  if (!relation) return '尚未结识这位 NPC'
-  if (!giftAffinity[kind]) return '请选择灵石或药草赠礼'
+  const npc = knownNpcRows(player).find(item => item.id === id)
+  if (!npc) return '尚未结识这位 NPC'
+  const relation = player.world.social[id] || npc
+  const gift = giftCatalog.find(item => item.id === kind)
+  if (!giftAffinity[kind] && !gift) return '请选择灵石、药草或礼匣中的礼物'
   if (hasActiveTrial(player)) return '请先退出试炼再赠礼'
-  if (knownNpcRows(player).find(npc => npc.id === id)?.affinity >= 1000) return '好感已满'
   const remaining = giftCooldownRemaining(relation, now)
   if (remaining) return `刚刚赠过礼，请稍后再来（还需 ${remaining} 秒）`
   const cost = npcGiftCost(player)
-  if (kind === 'herbs') {
+  const favorite = gift?.favorites?.includes(id)
+  const gain = gift ? gift.affinity + (favorite ? 2 : 0) : giftAffinity[kind]
+  const qingyuan = gift ? gift.qingyuan + (favorite ? 1 : 0) : kind === 'herbs' ? 3 : 2
+  if (gift) {
+    if (gift.recipient && gift.recipient !== id) return '这份专属礼物只适合' + worldNpcs.find(item => item.id === gift.recipient).name
+    if (!player.world.bonds?.gifts[kind]) return '礼物不足，可在礼物铺购买普通礼物或通过历练获得'
+    initializeBonds(player).gifts[kind]--
+  } else if (kind === 'herbs') {
     if (!spendHerbs(player, 2)) return '需要 2 份药草'
   } else {
     if (player.props.money < cost) return `需要 ${cost} 灵石`
     player.props.money -= cost
   }
-  relation.lastGiftAt = now
-  changeAffinity(player, id, giftAffinity[kind])
-  addWorldLog(player, `赠礼${worldNpcs.find(npc => npc.id === id).name}，好感 +${giftAffinity[kind]}。`, 'npc')
+  meetNpc(player, id).lastGiftAt = now
+  changeAffinity(player, id, gain)
+  addQingyuan(player, qingyuan)
+  player.props.flying = (player.props.flying || 0) + 1
+  gainBondExperience(player, npc.name, gift?.recipient ? 5 : favorite ? 2 : 1)
+  addWorldLog(player, `赠礼${npc.name}，好感 +${Math.min(gain, 1000 - npc.affinity)}，情缘 +${qingyuan}，传送符 +1。${favorite ? '这正是对方喜欢的礼物。' : ''}`, 'npc')
   return ''
 }
 
 export const formBond = (player, id) => {
   if (hasActiveTrial(player) || player.world.encounter) return '请先结束战斗再结为伴侣'
   const npc = worldNpcs.find(item => item.id === id)
-  const relation = player.world.social[id]
-  if (!npc?.romantic || !relation) return '这位 NPC 无法结为伴侣'
-  if (relation.partner) return '你们已经结为伴侣'
-  if (relation.affinity < 1000) return '需要 1000 好感'
+  const known = knownNpcRows(player).find(item => item.id === id)
+  if (!npc?.romantic || !known) return '这位 NPC 无法结为伴侣'
+  if (known.partner) return '你们已经结为伴侣'
+  if (known.affinity < 1000) return '需要 1000 好感'
   if (player.level < (npc.min || 0)) return `需要达到${levelNames(npc.min)}`
+  const relation = meetNpc(player, id)
+  relation.affinity = known.affinity
+  player.world.relationships[id] = relation.affinity
   relation.partner = true
   if (player.wife?.name !== npc.name && !player.wifes.some(item => item.name === npc.name)) {
-    player.wifes.push(applyCompanionBalance({ id: `partner-${id}`, name: npc.name, level: player.level, reincarnation: 0 }))
+    player.wifes.push(applyCompanionBalance({ id: `partner-${id}`, name: npc.name, level: player.level, reincarnation: 0, bondExperience: 0 }))
   }
   if (id === 'xuner') grantFlame(player, 'goldemperor', 'bond')
-  addWorldLog(player, `与${npc.name}结为伴侣。可在洞府道侣页选择同行。${id === 'xuner' ? '她将金帝焚天炎火种交给了你。' : ''}`, 'npc')
+  addWorldLog(player, `与${npc.name}结为伴侣。可在洞府道侣页安排最多三位同行。${id === 'xuner' ? '她将金帝焚天炎火种交给了你。' : ''}`, 'npc')
   return ''
 }
 
@@ -137,6 +154,7 @@ export const resolveOpportunity = (player, choice, random = Math.random) => {
   }
   recordJourneyEvent(player, event, choice)
   if (event.kind === 'courier' && choice === 'deliver') {
+    addQingyuan(player, 3)
     changeAffinity(player, npc.id, 3)
     const money = random() < 0.3 ? 20 + event.level * 3 : 0
     player.props.money += money
@@ -145,6 +163,7 @@ export const resolveOpportunity = (player, choice, random = Math.random) => {
   }
   const special = wildEventTypes[event.kind]
   if (special?.fire && choice === special.choice) {
+    addQingyuan(player, 3)
     player.world.opportunityProgress ||= {}
     const attempts = (player.world.opportunityProgress[special.fire] || 0) + 1
     player.world.opportunityProgress[special.fire] = attempts
@@ -178,6 +197,7 @@ export const resolveOpportunity = (player, choice, random = Math.random) => {
     addWorldLog(player, `为${npc.name}挺身而出，战胜${player.world.encounter.name}才能化解危机。`, 'combat')
     return true
   }
+  addQingyuan(player, 3)
   addWorldLog(player, `与${npc.name}完成${opportunityChoices({ world: { opportunity: event } }).find(item => item.id === choice)?.label || '机缘'}，好感提升。`, 'npc')
   return true
 }
@@ -209,6 +229,7 @@ export const harvestHerb = (player, index, now = Date.now(), random = Math.rando
   garden.plots[index] = null
   addHerbs(player, seed.id, seed.yield)
   garden.harvests++
+  rewardGardenBond(player, random)
   garden.pendingCultivation += Math.floor(Math.min(player.maxCultivation * 0.025, cultivationPerTick(player.level) * 3 * (herbSeeds.indexOf(seed) + 1)))
   settleGardenCultivation(player)
   if (!garden.visitor && random() < 0.12) {
@@ -280,6 +301,7 @@ export const startTrial = (player, id) => {
   if (hasActiveTrial(player)) return '请先完成或离开当前试炼'
   if (player.world.encounter || player.world.opportunity) return '请先结束当前野外战斗或机缘'
   if (player.health < player.maxHealth * 0.5) return '气血不足一半，请先回营疗伤'
+  initializeBonds(player)
   player.world.mode = 'idle'
   player.world.trial = { id, stage: 0, status: 'fighting', enemy: trialEnemy(id, 0), auto: false, lastAttack: null }
   player.world.lastTick = Date.now()
@@ -313,6 +335,7 @@ export const trialStep = (player, random = Math.random) => {
       run.status = 'cleared'
       run.auto = false
       if (first) grantFlame(player, definition.fire, 'trial')
+      rewardTrialGift(player, run.id, first, random)
       player.props.money += (definition.min + 1) * (first ? 60 : 12)
       player.props[stoneTiers[Math.min(5, Math.floor(definition.min / 18))].key] += first ? 8 : 2
       gainCultivation(player, player.maxCultivation * (first ? 0.5 : 0.1))

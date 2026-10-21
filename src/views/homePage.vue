@@ -217,6 +217,7 @@
             <tag class="pet" v-if="player.wife?.name" closable @close="wifeRevoke" @click="wifeItemShow = true">
               {{ player.wife?.name }}
             </tag>
+            <span v-if="player.world.bonds.team.length > 1" @click="wifeItemShow = true"> · 另有 {{ player.world.bonds.team.length - 1 }} 位支援同行</span>
             <span v-else>无</span>
           </span>
           <span class="equip">
@@ -357,13 +358,7 @@
               </div>
             </el-tab-pane>
             <el-tab-pane label="道侣" name="wife">
-              <div class="inventory-content">
-                <template v-for="(item, index) in player.wifes" :key="index">
-                  <tag class="inventory-item" @click="wifeItemInfo(item)">
-                    {{ item.name }}
-                  </tag>
-                </template>
-              </div>
+              <PartnerBoard />
             </el-tab-pane>
             <el-tab-pane label="鸿蒙商店" name="shop">
               <div class="el-dropdown">
@@ -416,29 +411,8 @@
         {{ levelNames(index) }}
       </tag>
     </el-drawer>
-    <el-drawer :title="player.wife?.name" v-model="wifeItemShow" direction="rtl" class="strengthen">
-      <div class="strengthen-box">
-        <div class="attributes">
-          <div class="attribute-box">
-            <div class="tag attribute">境界: {{ levelNames(player.wife.level) }}</div>
-            <div class="tag attribute">气血: {{ formatNumberToChineseUnit(player.wife.health) }}</div>
-            <div class="tag attribute">攻击: {{ formatNumberToChineseUnit(player.wife.attack) }}</div>
-            <div class="tag attribute">防御: {{ formatNumberToChineseUnit(player.wife.defense) }}</div>
-            <div
-              class="tag attribute"
-              @click="gameNotifys({ title: '获得方式', message: '可以通过赠送礼物给NPC获得', position: 'top-left' })"
-            >
-              拥有情缘点: {{ formatNumberToChineseUnit(player.props.qingyuan) }}
-            </div>
-            <div class="tag attribute">升级消耗: {{ player.wife.level * 10 }}</div>
-          </div>
-        </div>
-        <div class="click-box">
-          <el-button type="primary" @click="wifeUpgrade(player.wife)" :disabled="player.wife.level >= maxLv">
-            {{ player.wife.level >= maxLv ? '道侣等级已满' : '道侣升级' }}
-          </el-button>
-        </div>
-      </div>
+    <el-drawer title="道侣与同行" v-model="wifeItemShow" direction="rtl" size="min(860px, 96vw)">
+      <PartnerBoard />
     </el-drawer>
     <el-drawer :title="player.pet?.name" v-model="petItemShow" direction="rtl" class="strengthen">
       <div class="strengthen-box">
@@ -1096,6 +1070,9 @@
   // 标签组件
   import tag from '@/components/tag.vue'
   import SalvageEquipment from '@/components/SalvageEquipment.vue'
+  import PartnerBoard from '@/components/PartnerBoard.vue'
+  import { setPartnerTeam } from '@/plugins/partners'
+  import { operationFeedback } from '@/plugins/feedback'
   // 商店
   import shop from '@/plugins/shop'
   // 装备
@@ -1779,37 +1756,6 @@
       })
       .catch(() => {})
   }
-  // 道侣升级
-  const wifeUpgrade = item => {
-    if (combatLocked()) return
-    // 计算道侣升级所需材料数量
-    const consume = item.level * 10
-    // 如果情缘点不足
-    if (consume > player.value.props.qingyuan) {
-      // 发送通知
-      gameNotifys({
-        title: '道侣升级提示',
-        message: '情缘点不足, 进行无法培养',
-        position: 'top-left'
-      })
-      return
-    }
-    // 道侣升级确认弹窗
-    ElMessageBox.confirm('你确定要升级该道侣吗?', '道侣升级提示', {
-      cancelButtonText: '我点错了',
-      confirmButtonText: '确定以及肯定'
-    })
-      .then(() => {
-        const before = { attack: item.attack, defense: item.defense, health: item.health }
-        item.level++
-        applyCompanionBalance(item)
-        playerAttribute(0, item.attack - before.attack, item.health - before.health, 0, item.defense - before.defense)
-        player.value.props.qingyuan -= consume
-        gameNotifys({ title: '道侣培养', message: '培养成功，同行属性稳步提升' })
-      })
-      .catch(() => {})
-  }
-
   // 计算灵宠升级所需消耗
   const petConsumption = lv => {
     // 是否勾选转生选项
@@ -1840,52 +1786,9 @@
       gameNotifys({ title: '购买提示', message: '购买失败, 鸿蒙石不足' })
     }
   }
-  // 道侣跟随
-  const wifeTack = item => {
-    if (combatLocked()) return
-    // 如果已经有道侣跟随就收回
-    if (JSON.stringify(player.value.wife) != '{}') {
-      const itemInfo = player.value.wife
-      // 更新玩家属性，移除跟随道侣的属性加成
-      playerAttribute(-itemInfo.dodge, -itemInfo.attack, -itemInfo.health, -itemInfo.critical, -itemInfo.defense)
-      // 收回当前跟随的道侣
-      player.value.wifes.push(player.value.wife)
-    }
-    player.value.wife = item
-    // 更新玩家属性，添加当前跟随道侣的属性加成
-    playerAttribute(item.dodge, item.attack, item.health, item.critical, item.defense)
-    // 从道侣背包中移除这个道侣
-    player.value.wifes = player.value.wifes.filter(i => i.name !== item.name)
-  }
   // 道侣收回
   const wifeRevoke = () => {
-    if (combatLocked()) return
-    const item = player.value.wife
-    // 更新玩家属性，移除当前跟随道侣的属性加成
-    playerAttribute(-item.dodge, -item.attack, -item.health, -item.critical, -item.defense)
-    // 收回当前跟随的道侣
-    player.value.wife = {}
-    player.value.wifes.push(item)
-  }
-  // 道侣信息
-  const wifeItemInfo = item => {
-    ElMessageBox.confirm('', item.name, {
-      center: true,
-      message: `<div class="monsterinfo">
-      <div class="monsterinfo-box">
-      <p>境界: ${levelNames(item.level)}</p>
-      <p>气血: ${formatNumberToChineseUnit(item.health)}</p>
-      <p>攻击: ${formatNumberToChineseUnit(item.attack)}</p>
-      <p>防御: ${formatNumberToChineseUnit(item.defense)}</p>
-      </div>
-    </div>`,
-      confirmButtonText: '跟随',
-      dangerouslyUseHTMLString: true
-    })
-      .then(() => {
-        wifeTack(item)
-      })
-      .catch(() => {})
+    operationFeedback(setPartnerTeam(player.value, player.value.world.bonds.team.filter(name => name !== player.value.wife.name)))
   }
   // 商店装备信息
   const shopItemInfo = item => {
